@@ -6,6 +6,13 @@ import (
 	"os"
 )
 
+// App holds application dependencies. Fully wired up in handlers.go (Task 7).
+type App struct {
+	Config *Config
+	DB     *DB
+	DialIn *DialInClient
+}
+
 func main() {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -18,7 +25,7 @@ func main() {
 	}
 	defer db.Close()
 
-	app := &App{Config: cfg, DB: db}
+	app := &App{Config: cfg, DB: db, DialIn: &DialInClient{}}
 	mux := http.NewServeMux()
 	app.RegisterRoutes(mux)
 
