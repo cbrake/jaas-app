@@ -112,9 +112,12 @@ func TestLoginWrongPassword(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, _ := client.PostForm(ta.server.URL+"/login", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/login", url.Values{
 		"password": {"wrong"},
 	})
+	if err != nil {
+		t.Fatalf("post login: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200 (re-render with error)", resp.StatusCode)
@@ -126,7 +129,10 @@ func TestDashboardRequiresAuth(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, _ := client.Get(ta.server.URL + "/")
+	resp, err := client.Get(ta.server.URL + "/")
+	if err != nil {
+		t.Fatalf("get dashboard: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("status = %d, want 303 redirect to login", resp.StatusCode)
@@ -137,10 +143,13 @@ func TestCreateAndListRoom(t *testing.T) {
 	ta := newTestApp(t)
 	client := ta.adminClient(t)
 
-	resp, _ := client.PostForm(ta.server.URL+"/rooms", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/rooms", url.Values{
 		"slug":          {"weekly-sync"},
 		"host_password": {"host123"},
 	})
+	if err != nil {
+		t.Fatalf("create room: %v", err)
+	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("create: status = %d, want 303", resp.StatusCode)
@@ -160,7 +169,10 @@ func TestWaitingRoom(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("host123"), bcrypt.DefaultCost)
 	ta.DB.CreateRoom("test-room", string(hash))
 
-	resp, _ := http.Get(ta.server.URL + "/m/test-room")
+	resp, err := http.Get(ta.server.URL + "/m/test-room")
+	if err != nil {
+		t.Fatalf("get meeting: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
@@ -224,7 +236,10 @@ func TestStartMeetingWrongPassword(t *testing.T) {
 
 func TestMeetingPageNotFound(t *testing.T) {
 	ta := newTestApp(t)
-	resp, _ := http.Get(ta.server.URL + "/m/nonexistent")
+	resp, err := http.Get(ta.server.URL + "/m/nonexistent")
+	if err != nil {
+		t.Fatalf("get meeting: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
