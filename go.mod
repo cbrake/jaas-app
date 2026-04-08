@@ -1,3 +1,3 @@
-module jaas-app
+module github.com/cbrake/jaas-app
 
 go 1.26.1
