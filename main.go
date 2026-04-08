@@ -1,16 +1,18 @@
 package main
 
 import (
+	"html/template"
 	"log"
 	"net/http"
 	"os"
 )
 
-// App holds application dependencies. Fully wired up in handlers.go (Task 7).
+// App holds application dependencies.
 type App struct {
-	Config *Config
-	DB     *DB
-	DialIn *DialInClient
+	Config    *Config
+	DB        *DB
+	DialIn    *DialInClient
+	templates *template.Template
 }
 
 func main() {

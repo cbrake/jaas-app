@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Meeting Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 2rem; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+        h1 form button { background: none; border: none; color: #666; cursor: pointer; font-size: 0.875rem; }
+        h2 { font-size: 1.125rem; margin-bottom: 1rem; }
+        .create-form { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .create-form form { display: flex; gap: 0.5rem; }
+        .create-form input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem; }
+        .create-form button { padding: 0.5rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+        .room-list { list-style: none; }
+        .room { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .room-info strong { font-size: 1rem; }
+        .room-info .meta { color: #666; font-size: 0.8rem; margin-top: 0.25rem; }
+        .room-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .room-actions button, .room-actions .btn { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; border: 1px solid #ddd; background: #fff; text-decoration: none; color: inherit; }
+        .room-actions .btn-danger { color: #dc2626; border-color: #dc2626; }
+        .empty { color: #666; text-align: center; padding: 2rem; }
+        .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>
+        Meeting Manager
+        <form method="POST" action="/logout"><button type="submit">Log out</button></form>
+    </h1>
+
+    <div class="create-form">
+        <h2>Create New Room</h2>
+        {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+        <form method="POST" action="/rooms">
+            <input type="text" name="slug" placeholder="Room slug (e.g. weekly-sync)" required pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only">
+            <input type="password" name="host_password" placeholder="Host password" required>
+            <button type="submit">Create</button>
+        </form>
+    </div>
+
+    <h2>Your Rooms</h2>
+    {{if .Rooms}}
+    <ul class="room-list">
+        {{range .Rooms}}
+        <li class="room">
+            <div class="room-info">
+                <strong>{{.Slug}}</strong>
+                <div class="meta">/m/{{.Slug}}{{if .DialIn}} · &#x1F4DE; {{.DialIn.PIN}}{{end}}</div>
+            </div>
+            <div class="room-actions">
+                <button onclick="navigator.clipboard.writeText(window.location.origin + '/m/{{.Slug}}')">Copy Link</button>
+                <form method="POST" action="/rooms/{{.Slug}}/delete">
+                    <button type="submit" class="btn-danger" onclick="return confirm('Delete {{.Slug}}?')">Delete</button>
+                </form>
+            </div>
+        </li>
+        {{end}}
+    </ul>
+    {{else}}
+    <p class="empty">No rooms yet. Create one above.</p>
+    {{end}}
+</body>
+</html>

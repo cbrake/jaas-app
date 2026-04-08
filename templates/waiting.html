@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
+    <title>{{.Slug}} — Waiting</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .waiting { color: #666; margin-bottom: 1.5rem; }
+        .host-form { border-top: 1px solid #eee; padding-top: 1.5rem; }
+        .host-form p { color: #888; font-size: 0.875rem; margin-bottom: 0.75rem; }
+        input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 0.75rem; }
+        button { width: 100%; padding: 0.5rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+        .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 0.75rem; }
+        .refresh-note { color: #aaa; font-size: 0.75rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>{{.Slug}}</h1>
+        <p class="waiting">Waiting for host to start the meeting...</p>
+        <div class="host-form">
+            <p>Are you the host?</p>
+            {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+            <form method="POST" action="/m/{{.Slug}}/start">
+                <input type="password" name="host_password" placeholder="Host password" required>
+                <input type="text" name="display_name" placeholder="Your name" required>
+                <button type="submit">Start Meeting</button>
+            </form>
+        </div>
+        <p class="refresh-note">Page auto-refreshes every 5 seconds</p>
+    </div>
+</body>
+</html>
