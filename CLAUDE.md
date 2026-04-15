@@ -19,6 +19,14 @@ Jitsi as a Service (JaaS) web application for hosting and managing Jitsi meeting
 - `go build -o jaas-app .` — build binary
 - `go test ./...` — run all tests
 
+## Deployment
+
+- Deploy script: `. envsetup.sh && jaas_deploy` — cross-compiles for linux/amd64, scps files to the server, restarts the systemd service
+- Target host: `mtg.bec-systems.com`
+- Install path: `/opt/jaas-app/`
+- Runs as systemd service `jaas-app` under the `jaas` user/group
+- Server configuration is managed by the Ansible playbook at `/scratch/BEC/ops/all.yml` (tagged `jaas`)
+
 ## Formatting
 
 - Go: `gofmt` / `goimports` (standard Go formatting)

@@ -1,0 +1,24 @@
+[Unit]
+Description=JaaS Meeting App
+After=network.target
+
+[Service]
+Type=simple
+User=jaas
+Group=jaas
+WorkingDirectory=/opt/jaas-app
+ExecStart=/opt/jaas-app/jaas-app serve
+Restart=on-failure
+RestartSec=5
+
+EnvironmentFile=/opt/jaas-app/env
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/jaas-app
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

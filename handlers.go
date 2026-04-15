@@ -1,18 +1,25 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"html/template"
 	"log"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
+//go:embed templates/*.html
+var templateFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
 func (app *App) loadTemplates() error {
-	t, err := template.ParseGlob(filepath.Join("templates", "*.html"))
+	t, err := template.ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return err
 	}
@@ -37,15 +44,22 @@ func (app *App) render(w http.ResponseWriter, name string, data any) {
 func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	admin := RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDashboard))
 
-	mux.HandleFunc("GET /login", app.handleLoginPage)
-	mux.HandleFunc("POST /login", app.handleLogin)
-	mux.HandleFunc("POST /logout", app.handleLogout)
-	mux.Handle("GET /{$}", admin)
-	mux.Handle("POST /rooms", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleCreateRoom)))
-	mux.Handle("POST /rooms/{slug}/delete", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDeleteRoom)))
+	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
+	mux.HandleFunc("GET /{$}", app.handleHome)
+	mux.HandleFunc("GET /admin/login", app.handleLoginPage)
+	mux.HandleFunc("POST /admin/login", app.handleLogin)
+	mux.HandleFunc("POST /admin/logout", app.handleLogout)
+	mux.Handle("GET /admin", admin)
+	mux.Handle("POST /admin/rooms", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleCreateRoom)))
+	mux.Handle("POST /admin/rooms/{slug}/delete", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDeleteRoom)))
+	mux.Handle("POST /admin/rooms/{slug}/start", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStart)))
 	mux.HandleFunc("GET /m/{slug}", app.handleMeeting)
-	mux.HandleFunc("POST /m/{slug}/start", app.handleStartMeeting)
+	mux.HandleFunc("POST /m/{slug}/join", app.handleJoinMeeting)
 	mux.HandleFunc("POST /m/{slug}/end", app.handleEndMeeting)
+}
+
+func (app *App) handleHome(w http.ResponseWriter, r *http.Request) {
+	app.render(w, "home.html", nil)
 }
 
 func (app *App) handleLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -59,12 +73,12 @@ func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, SignSession(app.Config.SessionSecret))
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (app *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, ClearSession())
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 
 type roomView struct {
@@ -79,12 +93,20 @@ func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch DIDs once for all rooms
+	numbers, err := app.DialIn.FetchDIDs()
+	if err != nil {
+		log.Printf("dial-in DIDs fetch: %v", err)
+	}
+
 	var views []roomView
 	for _, room := range rooms {
 		rv := roomView{Slug: room.Slug}
-		info, err := app.DialIn.FetchDialInInfo(app.Config.JaaSAppID, room.Slug)
-		if err == nil {
-			rv.DialIn = info
+		pin, err := app.DialIn.FetchPIN(app.Config.JaaSAppID, room.Slug)
+		if err != nil {
+			log.Printf("dial-in PIN for %s: %v", room.Slug, err)
+		} else if numbers != nil {
+			rv.DialIn = &DialInInfo{PIN: pin, Numbers: numbers}
 		}
 		views = append(views, rv)
 	}
@@ -124,18 +146,18 @@ func (app *App) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (app *App) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	app.DB.DeleteRoom(slug)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
+func (app *App) handleAdminStart(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
-	room, err := app.DB.GetRoom(slug)
+	_, err := app.DB.GetRoom(slug)
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -145,24 +167,45 @@ func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !room.Active {
-		app.render(w, "waiting.html", map[string]any{
-			"Slug": slug,
-		})
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
+	if displayName == "" {
+		displayName = "Admin"
+	}
+
+	app.DB.SetRoomActive(slug, true)
+
+	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
+}
+
+func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	room, err := app.DB.GetRoom(slug)
+	if errors.Is(err, ErrNotFound) {
+		w.WriteHeader(http.StatusNotFound)
+		app.render(w, "notfound.html", map[string]string{"Slug": slug})
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	// Check for moderator JWT in query param (set by /start redirect)
+	// Check for JWT in query param (set by /join redirect)
 	jwtToken := r.URL.Query().Get("jwt")
-	isModerator := jwtToken != ""
+	isModerator := r.URL.Query().Get("mod") == "1"
+	displayName := r.URL.Query().Get("name")
 
-	if !isModerator {
-		var err error
-		jwtToken, err = GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, "Guest", false)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+	if jwtToken == "" || (!room.Active && !isModerator) {
+		// No JWT or meeting ended — show the join form
+		app.render(w, "join.html", map[string]any{
+			"Slug": slug,
+		})
+		return
 	}
 
 	var dialIn *DialInInfo
@@ -176,15 +219,17 @@ func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
 		"AppID":       app.Config.JaaSAppID,
 		"JWT":         jwtToken,
 		"IsModerator": isModerator,
+		"DisplayName": displayName,
 		"DialIn":      dialIn,
 	})
 }
 
-func (app *App) handleStartMeeting(w http.ResponseWriter, r *http.Request) {
+func (app *App) handleJoinMeeting(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	room, err := app.DB.GetRoom(slug)
 	if errors.Is(err, ErrNotFound) {
-		http.NotFound(w, r)
+		w.WriteHeader(http.StatusNotFound)
+		app.render(w, "notfound.html", map[string]string{"Slug": slug})
 		return
 	}
 	if err != nil {
@@ -192,24 +237,54 @@ func (app *App) handleStartMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hostPassword := r.FormValue("host_password")
 	displayName := strings.TrimSpace(r.FormValue("display_name"))
-	if err := bcrypt.CompareHashAndPassword([]byte(room.HostHash), []byte(hostPassword)); err != nil {
-		app.render(w, "waiting.html", map[string]any{
+	if displayName == "" {
+		app.render(w, "join.html", map[string]any{
 			"Slug":  slug,
-			"Error": "Invalid host password",
+			"Error": "Name is required",
 		})
 		return
 	}
 
-	app.DB.SetRoomActive(slug, true)
+	hostPassword := r.FormValue("host_password")
 
-	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true)
+	// If host password provided, validate and join as moderator
+	if hostPassword != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(room.HostHash), []byte(hostPassword)); err != nil {
+			app.render(w, "join.html", map[string]any{
+				"Slug":  slug,
+				"Error": "Invalid host password",
+			})
+			return
+		}
+
+		app.DB.SetRoomActive(slug, true)
+
+		jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
+		return
+	}
+
+	// No host password — guest flow
+	if !room.Active {
+		// Meeting not started yet, show waiting page
+		app.render(w, "waiting.html", map[string]any{
+			"Slug":        slug,
+			"DisplayName": displayName,
+		})
+		return
+	}
+
+	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, false)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt, http.StatusSeeOther)
+	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&name="+url.QueryEscape(displayName), http.StatusSeeOther)
 }
 
 func (app *App) handleEndMeeting(w http.ResponseWriter, r *http.Request) {

@@ -17,10 +17,12 @@
 </head>
 <body>
     <div class="card">
+        <img src="/static/logo.svg" alt="BEC Systems" style="width: 120px; margin-bottom: 1rem;">
         <h1>Meeting Manager</h1>
         {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-        <form method="POST" action="/login">
-            <input type="password" name="password" placeholder="Admin password" autofocus required>
+        <form method="POST" action="/admin/login">
+            <input type="hidden" name="username" value="admin" autocomplete="username">
+            <input type="password" name="password" placeholder="Admin password" autofocus required autocomplete="current-password">
             <button type="submit">Log In</button>
         </form>
     </div>

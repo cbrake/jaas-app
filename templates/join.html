@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Slug}} — Join</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        h1 { font-size: 1.25rem; margin-bottom: 1.5rem; }
+        input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 0.75rem; }
+        button { width: 100%; padding: 0.5rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 0.75rem; }
+        .host-section { border-top: 1px solid #eee; padding-top: 1rem; margin-top: 0.5rem; }
+        .host-section p { color: #888; font-size: 0.875rem; margin-bottom: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="/static/logo.svg" alt="BEC Systems" style="width: 120px; margin-bottom: 1rem;">
+        <h1>{{.Slug}}</h1>
+        {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+        <form method="POST" action="/m/{{.Slug}}/join">
+            <input type="text" name="display_name" placeholder="Your name" autofocus required autocomplete="name">
+            <div class="host-section">
+                <p>Host? Enter password to start the meeting</p>
+                <input type="text" name="host_password" placeholder="Host password (optional)" autocomplete="off">
+            </div>
+            <button type="submit">Join Meeting</button>
+        </form>
+    </div>
+</body>
+</html>

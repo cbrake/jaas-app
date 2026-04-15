@@ -56,7 +56,7 @@ func (ta *testApp) adminClient(t *testing.T) *http.Client {
 		},
 	}
 
-	resp, err := client.PostForm(ta.server.URL+"/login", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/admin/login", url.Values{
 		"password": {"admin123"},
 	})
 	if err != nil {
@@ -68,7 +68,7 @@ func (ta *testApp) adminClient(t *testing.T) *http.Client {
 
 func TestLoginPage(t *testing.T) {
 	ta := newTestApp(t)
-	resp, err := http.Get(ta.server.URL + "/login")
+	resp, err := http.Get(ta.server.URL + "/admin/login")
 	if err != nil {
 		t.Fatalf("get login: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestLoginSuccess(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.PostForm(ta.server.URL+"/login", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/admin/login", url.Values{
 		"password": {"admin123"},
 	})
 	if err != nil {
@@ -93,8 +93,8 @@ func TestLoginSuccess(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("status = %d, want 303", resp.StatusCode)
 	}
-	if loc := resp.Header.Get("Location"); loc != "/" {
-		t.Errorf("redirect = %q, want /", loc)
+	if loc := resp.Header.Get("Location"); loc != "/admin" {
+		t.Errorf("redirect = %q, want /admin", loc)
 	}
 	found := false
 	for _, c := range resp.Cookies() {
@@ -112,7 +112,7 @@ func TestLoginWrongPassword(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.PostForm(ta.server.URL+"/login", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/admin/login", url.Values{
 		"password": {"wrong"},
 	})
 	if err != nil {
@@ -129,7 +129,7 @@ func TestDashboardRequiresAuth(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(ta.server.URL + "/")
+	resp, err := client.Get(ta.server.URL + "/admin")
 	if err != nil {
 		t.Fatalf("get dashboard: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestCreateAndListRoom(t *testing.T) {
 	ta := newTestApp(t)
 	client := ta.adminClient(t)
 
-	resp, err := client.PostForm(ta.server.URL+"/rooms", url.Values{
+	resp, err := client.PostForm(ta.server.URL+"/admin/rooms", url.Values{
 		"slug":          {"weekly-sync"},
 		"host_password": {"host123"},
 	})
@@ -178,8 +178,8 @@ func TestWaitingRoom(t *testing.T) {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(bodyBytes), "Waiting for host") {
-		t.Error("expected waiting room page")
+	if !strings.Contains(string(bodyBytes), "Join Meeting") {
+		t.Error("expected join form page")
 	}
 }
 
@@ -191,7 +191,7 @@ func TestStartMeeting(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, _ := client.PostForm(ta.server.URL+"/m/test-room/start", url.Values{
+	resp, _ := client.PostForm(ta.server.URL+"/m/test-room/join", url.Values{
 		"host_password": {"host123"},
 		"display_name":  {"Host User"},
 	})
@@ -219,7 +219,7 @@ func TestStartMeetingWrongPassword(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, _ := client.PostForm(ta.server.URL+"/m/test-room/start", url.Values{
+	resp, _ := client.PostForm(ta.server.URL+"/m/test-room/join", url.Values{
 		"host_password": {"wrong"},
 		"display_name":  {"Host User"},
 	})
@@ -252,7 +252,7 @@ func TestDeleteRoomHandler(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("host123"), bcrypt.DefaultCost)
 	ta.DB.CreateRoom("to-delete", string(hash))
 
-	resp, _ := client.PostForm(ta.server.URL+"/rooms/to-delete/delete", url.Values{})
+	resp, _ := client.PostForm(ta.server.URL+"/admin/rooms/to-delete/delete", url.Values{})
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("status = %d, want 303", resp.StatusCode)

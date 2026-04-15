@@ -66,7 +66,7 @@ func LoadConfig() (*Config, error) {
 
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if listenAddr == "" {
-		listenAddr = ":8080"
+		listenAddr = ":8370"
 	}
 
 	dbPath := os.Getenv("DB_PATH")

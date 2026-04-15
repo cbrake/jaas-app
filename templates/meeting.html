@@ -7,72 +7,43 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #fff; }
-        #join-form { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .card { background: #fff; color: #333; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); width: 100%; max-width: 360px; text-align: center; }
-        .card h1 { font-size: 1.25rem; margin-bottom: 1rem; }
-        .card input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 0.75rem; }
-        .card button { width: 100%; padding: 0.5rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
-        #meet { width: 100%; height: 100vh; display: none; }
-        .dialin { background: #111; padding: 0.75rem 1.5rem; font-size: 0.85rem; color: #aaa; display: none; }
+        #meet { width: 100%; height: 100vh; }
+        .dialin { background: #111; padding: 0.75rem 1.5rem; font-size: 0.85rem; color: #aaa; }
     </style>
     <script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
+    <script>
+        // Remove JWT from URL bar to prevent accidental sharing
+        if (window.location.search) {
+            history.replaceState(null, '', window.location.pathname);
+        }
+    </script>
 </head>
 <body>
-    {{if not .IsModerator}}
-    <div id="join-form">
-        <div class="card">
-            <h1>Join: {{.Slug}}</h1>
-            <input type="text" id="displayName" placeholder="Your name" autofocus required>
-            <button onclick="joinMeeting()">Join Meeting</button>
-        </div>
+    <div id="meet"></div>
+    {{if .DialIn}}
+    <div class="dialin">
+        &#x1F4DE; Dial-in: {{range $country, $nums := .DialIn.Numbers}}{{range $nums}}{{.}} {{end}}{{end}} · PIN: {{.DialIn.PIN}}
     </div>
     {{end}}
 
-    <div id="meet"{{if not .IsModerator}} style="display:none"{{end}}></div>
-    <div class="dialin" id="dialin"{{if not .IsModerator}} style="display:none"{{end}}>
-        {{if .DialIn}}&#x1F4DE; Dial-in: {{range $country, $nums := .DialIn.Numbers}}{{range $nums}}{{.}} {{end}}{{end}} · PIN: {{.DialIn.PIN}}{{end}}
-    </div>
-
     <script>
+        var api = new JitsiMeetExternalAPI('8x8.vc', {
+            roomName: '{{.AppID}}/{{.Slug}}',
+            jwt: '{{.JWT}}',
+            parentNode: document.getElementById('meet'),
+            userInfo: {
+                displayName: '{{.DisplayName}}'
+            }
+        });
         {{if .IsModerator}}
-        (function() {
-            var api = new JitsiMeetExternalAPI('8x8.vc', {
-                roomName: '{{.AppID}}/{{.Slug}}',
-                jwt: '{{.JWT}}',
-                parentNode: document.getElementById('meet')
-            });
-            api.addEventListener('readyToClose', function() {
-                fetch('/m/{{.Slug}}/end', { method: 'POST' });
-                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
-            });
-        })();
+        api.addEventListener('readyToClose', function() {
+            fetch('/m/{{.Slug}}/end', { method: 'POST' });
+            document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
+        });
         {{else}}
-        function joinMeeting() {
-            var name = document.getElementById('displayName').value.trim();
-            if (!name) return;
-
-            document.getElementById('join-form').style.display = 'none';
-            document.getElementById('meet').style.display = 'block';
-            document.getElementById('dialin').style.display = 'block';
-
-            var api = new JitsiMeetExternalAPI('8x8.vc', {
-                roomName: '{{.AppID}}/{{.Slug}}',
-                jwt: '{{.JWT}}',
-                parentNode: document.getElementById('meet'),
-                userInfo: {
-                    displayName: name
-                }
-            });
-
-            api.addEventListener('readyToClose', function() {
-                document.getElementById('meet').style.display = 'none';
-                document.getElementById('dialin').style.display = 'none';
-                document.getElementById('join-form').style.display = 'flex';
-                document.getElementById('join-form').querySelector('.card h1').textContent = 'Meeting ended';
-                document.getElementById('join-form').querySelector('.card input').style.display = 'none';
-                document.getElementById('join-form').querySelector('.card button').style.display = 'none';
-            });
-        }
+        api.addEventListener('readyToClose', function() {
+            document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
+        });
         {{end}}
     </script>
 </body>

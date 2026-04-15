@@ -10,11 +10,9 @@ import (
 func TestFetchDialInInfo(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/_jaas/vmms-conference-mapper/access/v1/dids", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
-			"numbers": map[string]any{
-				"US": []string{"+1-555-0123"},
-				"GB": []string{"+44-20-7946-0958"},
-			},
+		json.NewEncoder(w).Encode([]map[string]string{
+			{"countryCode": "US", "formattedNumber": "+1-555-0123"},
+			{"countryCode": "GB", "formattedNumber": "+44-20-7946-0958"},
 		})
 	})
 	mux.HandleFunc("/v1/_jaas/vmms-conference-mapper/v1/access", func(w http.ResponseWriter, r *http.Request) {

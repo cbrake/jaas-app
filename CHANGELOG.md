@@ -8,6 +8,46 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.0.3] - 2025-04-15
+
+### Added
+
+- Deploy script (`envsetup.sh`) with `jaas_deploy` function for building,
+  deploying, and restarting the service on the target server
+- Systemd service file and deployment configuration
+- BEC Systems logo on home, login, and join pages
+- Home page at `/` directing users to contact BEC Systems for meeting links
+- "Not found" page with contact info when meeting ID doesn't exist
+- Join page with name and optional host password fields
+- Admin name setting on dashboard (saved to localStorage)
+- "Start" button on dashboard to join meetings directly as moderator
+- "Copy Link" and "Copy Dial-in" buttons with visual feedback on dashboard
+- Show/hide toggle for host password on room creation
+
+### Changed
+
+- Admin dashboard moved from `/` to `/admin` (login at `/admin/login`)
+- Templates embedded in binary via `go:embed` instead of read from disk
+- Reworked meeting join flow: name entry, optional host password, waiting room
+  with auto-refresh, multiple moderators supported
+- Dial-in API parsing updated to match actual 8x8 response format (array of
+  objects)
+- DIDs fetched once per dashboard load instead of per room
+- Default listen port changed to 8370
+
+### Fixed
+
+- Waiting room auto-refresh no longer clears form inputs
+- Jitsi iframe container visibility for moderator path
+- Display name now passed through to Jitsi via `userInfo`
+
+### Security
+
+- JWT stripped from URL bar after meeting page loads via `history.replaceState`
+- Stale JWT URLs rejected when meeting is no longer active
+- Meeting join forms use `autocomplete` attributes to prevent credential
+  cross-contamination between admin login and meeting passwords
+
 ## [0.0.2] - 2025-04-15
 
 ### Added

@@ -20,23 +20,62 @@
         .room-info .meta { color: #666; font-size: 0.8rem; margin-top: 0.25rem; }
         .room-actions { display: flex; gap: 0.5rem; align-items: center; }
         .room-actions button, .room-actions .btn { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; border: 1px solid #ddd; background: #fff; text-decoration: none; color: inherit; }
+        .room-actions .btn-start { background: #16a34a; color: #fff; border-color: #16a34a; }
         .room-actions .btn-danger { color: #dc2626; border-color: #dc2626; }
         .empty { color: #666; text-align: center; padding: 2rem; }
         .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; }
     </style>
+    <script>
+        function flashButton(btn, msg) {
+            var orig = btn.textContent;
+            btn.textContent = msg;
+            btn.disabled = true;
+            setTimeout(function() { btn.textContent = orig; btn.disabled = false; }, 1500);
+        }
+        function copyLink(btn, slug) {
+            navigator.clipboard.writeText(window.location.origin + '/m/' + slug);
+            flashButton(btn, 'Copied!');
+        }
+        function copyDialIn(btn, slug, pin, usNumber) {
+            var text = 'Join by phone: ' + usNumber + '\nPIN: ' + pin + '\nOr join online: ' + window.location.origin + '/m/' + slug;
+            navigator.clipboard.writeText(text);
+            flashButton(btn, 'Copied!');
+        }
+        function saveName() {
+            var name = document.getElementById('admin_name').value.trim();
+            localStorage.setItem('admin_display_name', name);
+            document.querySelectorAll('.start-name').forEach(function(el) { el.value = name; });
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            var saved = localStorage.getItem('admin_display_name') || '';
+            if (saved) {
+                document.getElementById('admin_name').value = saved;
+                document.querySelectorAll('.start-name').forEach(function(el) { el.value = saved; });
+            }
+        });
+    </script>
 </head>
 <body>
     <h1>
         Meeting Manager
-        <form method="POST" action="/logout"><button type="submit">Log out</button></form>
+        <form method="POST" action="/admin/logout"><button type="submit">Log out</button></form>
     </h1>
+
+    <div class="create-form" style="margin-bottom: 1rem;">
+        <h2>Settings</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <label for="admin_name" style="white-space: nowrap; font-size: 0.875rem;">Your Name</label>
+            <input type="text" id="admin_name" placeholder="Display name for meetings" oninput="saveName()" style="margin-bottom: 0;">
+        </div>
+    </div>
 
     <div class="create-form">
         <h2>Create New Room</h2>
         {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-        <form method="POST" action="/rooms">
-            <input type="text" name="slug" placeholder="Room slug (e.g. weekly-sync)" required pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only">
-            <input type="password" name="host_password" placeholder="Host password" required>
+        <form method="POST" action="/admin/rooms">
+            <input type="text" name="slug" placeholder="Room slug (e.g. weekly-sync)" required pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only" autocomplete="off">
+            <input type="password" name="host_password" id="host_password" placeholder="Host password" required autocomplete="new-password">
+            <button type="button" onclick="var p=document.getElementById('host_password'); p.type = p.type==='password' ? 'text' : 'password'; this.textContent = p.type==='password' ? 'Show' : 'Hide'">Show</button>
             <button type="submit">Create</button>
         </form>
     </div>
@@ -48,11 +87,19 @@
         <li class="room">
             <div class="room-info">
                 <strong>{{.Slug}}</strong>
-                <div class="meta">/m/{{.Slug}}{{if .DialIn}} · &#x1F4DE; {{.DialIn.PIN}}{{end}}</div>
+                <div class="meta">
+                    /m/{{.Slug}}
+                    {{if .DialIn}} · PIN: {{.DialIn.PIN}}{{with index .DialIn.Numbers "US"}} · {{index . 0}}{{end}}{{end}}
+                </div>
             </div>
             <div class="room-actions">
-                <button onclick="navigator.clipboard.writeText(window.location.origin + '/m/{{.Slug}}')">Copy Link</button>
-                <form method="POST" action="/rooms/{{.Slug}}/delete">
+                <form method="POST" action="/admin/rooms/{{.Slug}}/start" style="display:inline">
+                    <input type="hidden" name="display_name" class="start-name" value="Admin">
+                    <button type="submit" class="btn btn-start">Start</button>
+                </form>
+                <button onclick="copyLink(this, '{{.Slug}}')">Copy Link</button>
+                {{if .DialIn}}<button onclick="copyDialIn(this, '{{.Slug}}', '{{.DialIn.PIN}}', '{{with index .DialIn.Numbers "US"}}{{index . 0}}{{end}}')">Copy Dial-in</button>{{end}}
+                <form method="POST" action="/admin/rooms/{{.Slug}}/delete">
                     <button type="submit" class="btn-danger" onclick="return confirm('Delete {{.Slug}}?')">Delete</button>
                 </form>
             </div>
