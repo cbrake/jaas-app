@@ -1,10 +1,10 @@
-# Jitsi as a Service Application
+# 📹 Jitsi as a Service Application
 
 A web application for hosting [Jitsi as a Service](https://jaas.8x8.vc/#/)
 meetings. It provides a simple interface for creating and managing video
 meetings powered by the 8x8 JaaS platform.
 
-## Features
+## ✨ Features
 
 - **Meeting URL generation** — create shareable meeting links with custom slugs
 - **No login required** — guests can join meetings without creating an account
@@ -12,14 +12,14 @@ meetings powered by the 8x8 JaaS platform.
 - **Phone dial-in** — allow participants to join via phone call (provided by
   8x8, no SIP configuration required)
 
-## Getting Started
+## 🚀 Getting Started
 
-### Prerequisites
+### 📋 Prerequisites
 
 - [Go](https://go.dev/) 1.22 or later
 - A JaaS account and API key from [8x8](https://jaas.8x8.vc/#/)
 
-### Setup
+### ⚙️ Setup
 
 Copy the example environment file and fill in your JaaS credentials:
 
@@ -27,19 +27,19 @@ Copy the example environment file and fill in your JaaS credentials:
 cp .env.example .env
 ```
 
-### Development
+### 💻 Development
 
 ```sh
 go run .
 ```
 
-### Build
+### 🔨 Build
 
 ```sh
 go build -o jaas-app .
 ```
 
-## Configuration
+## 🔧 Configuration
 
 The application requires the following environment variables:
 
@@ -50,9 +50,9 @@ The application requires the following environment variables:
 | `ADMIN_PASSWORD` | Password to access the admin dashboard    |
 | `SESSION_SECRET` | Secret used to sign session cookies       |
 
-## Design
+## 🏗️ Design
 
-### Access Model
+### 🔐 Access Model
 
 Three tiers of access, two passwords:
 
@@ -69,7 +69,7 @@ Three tiers of access, two passwords:
 - Guests need nothing — once a host has started the meeting, guests join
   directly via the Jitsi iframe.
 
-### Pages
+### 📄 Pages
 
 1. **Login** (`/login`) — single password field, sets session cookie, redirects
    to dashboard.
@@ -83,7 +83,7 @@ Three tiers of access, two passwords:
    - **Active meeting** — prompts for a display name, then loads the Jitsi
      iframe. Dial-in number and PIN displayed below the iframe.
 
-### Routes
+### 🛤️ Routes
 
 | Method | Path                   | Auth   | Behavior                                                        |
 | ------ | ---------------------- | ------ | --------------------------------------------------------------- |
@@ -96,7 +96,7 @@ Three tiers of access, two passwords:
 | GET    | `/m/{slug}`            | none   | If active: Jitsi iframe (guest JWT). If not: waiting room       |
 | POST   | `/m/{slug}/start`      | none   | Validate host password, set active, redirect with moderator JWT |
 
-### Data Model
+### 🗃️ Data Model
 
 Single SQLite table:
 
@@ -116,7 +116,7 @@ CREATE TABLE rooms (
   Jitsi session ends (via iframe `readyToClose` event) or after a server-side
   timeout (4 hours).
 
-### JWT Generation
+### 🔑 JWT Generation
 
 The server generates RS256 JWTs for the Jitsi iframe:
 
@@ -124,7 +124,7 @@ The server generates RS256 JWTs for the Jitsi iframe:
 - **Moderator JWT** — adds recording, mute-all, kick, and other moderator
   permissions.
 
-### Meeting Lifecycle
+### 🔄 Meeting Lifecycle
 
 1. Admin creates a room with a slug and host password.
 2. Admin shares `/m/{slug}` with participants.
@@ -135,7 +135,7 @@ The server generates RS256 JWTs for the Jitsi iframe:
 6. When the meeting ends, the iframe `readyToClose` event marks the room
    inactive. A 4-hour server-side timeout acts as a fallback.
 
-## Phone Dial-In
+## 📞 Phone Dial-In
 
 PSTN dial-in is built into JaaS and enabled by default on all accounts — no SIP
 trunks or extra configuration needed.
@@ -161,7 +161,7 @@ file. Not currently implemented.
 See:
 [PSTN Dial In/Out docs](https://developer.8x8.com/jaas/docs/pstn-dial-in-and-out/)
 
-## Reference
+## 📚 Reference
 
 - [JaaS Console](https://jaas.8x8.vc/#/)
 - [JaaS Onboarding Guide](https://developer.8x8.com/jaas/docs/jaas-onboarding/)
