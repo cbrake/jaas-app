@@ -14,12 +14,22 @@
         .refresh-note { color: #aaa; font-size: 0.75rem; margin-top: 1rem; }
         .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .host-toggle { color: #888; font-size: 0.8rem; cursor: pointer; margin-top: 1rem; display: inline-block; }
+        .host-toggle:hover { color: #2563eb; }
+        .host-section { display: none; border-top: 1px solid #eee; padding-top: 1rem; margin-top: 0.75rem; text-align: center; }
+        .host-section.open { display: block; }
+        .host-section p { color: #666; font-size: 0.8rem; margin-bottom: 0.5rem; }
+        .host-section input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 0.75rem; }
+        .host-section button { width: 100%; padding: 0.5rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+        .host-section button:hover { background: #1d4ed8; }
     </style>
     <script>
-        // Re-submit the join form every 5 seconds.
-        // Once the host starts the meeting, the server will redirect to the meeting page.
-        setTimeout(function() {
-            document.getElementById('rejoin').submit();
+        // Re-submit the join form every 5 seconds, but only if the host section is closed.
+        setInterval(function() {
+            var hostSection = document.getElementById('host-section');
+            if (!hostSection.classList.contains('open')) {
+                document.getElementById('rejoin').submit();
+            }
         }, 5000);
     </script>
 </head>
@@ -29,6 +39,15 @@
         <h1>{{.Slug}}</h1>
         <p class="name">Hi, {{.DisplayName}}</p>
         <p class="waiting">Waiting for host to start the meeting...</p>
+        <span class="host-toggle" onclick="document.getElementById('host-section').classList.toggle('open')">Are you the host?</span>
+        <div id="host-section" class="host-section">
+            <p>Enter password to start or cohost the meeting.</p>
+            <form method="POST" action="/m/{{.Slug}}/join">
+                <input type="hidden" name="display_name" value="{{.DisplayName}}">
+                <input type="text" name="host_password" placeholder="Host password" autocomplete="off">
+                <button type="submit">Start Meeting</button>
+            </form>
+        </div>
         <p class="refresh-note">This page checks automatically every 5 seconds</p>
     </div>
     <form id="rejoin" method="POST" action="/m/{{.Slug}}/join" style="display:none">

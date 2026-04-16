@@ -37,8 +37,11 @@
         });
         {{if .IsModerator}}
         api.addEventListener('readyToClose', function() {
-            fetch('/m/{{.Slug}}/end', { method: 'POST' });
+            navigator.sendBeacon('/m/{{.Slug}}/end');
             document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
+        });
+        window.addEventListener('beforeunload', function() {
+            navigator.sendBeacon('/m/{{.Slug}}/end');
         });
         {{else}}
         api.addEventListener('readyToClose', function() {

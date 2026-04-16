@@ -17,10 +17,14 @@
         .room-list { list-style: none; }
         .room { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
         .room-info strong { font-size: 1rem; }
+        .status { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 9999px; margin-left: 0.5rem; vertical-align: middle; }
+        .status-active { background: #dcfce7; color: #16a34a; }
+        .status-inactive { background: #f3f4f6; color: #9ca3af; }
         .room-info .meta { color: #666; font-size: 0.8rem; margin-top: 0.25rem; }
         .room-actions { display: flex; gap: 0.5rem; align-items: center; }
         .room-actions button, .room-actions .btn { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; border: 1px solid #ddd; background: #fff; text-decoration: none; color: inherit; }
         .room-actions .btn-start { background: #16a34a; color: #fff; border-color: #16a34a; }
+        .room-actions .btn-stop { background: #f59e0b; color: #fff; border-color: #f59e0b; }
         .room-actions .btn-danger { color: #dc2626; border-color: #dc2626; }
         .empty { color: #666; text-align: center; padding: 2rem; }
         .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; }
@@ -86,17 +90,20 @@
         {{range .Rooms}}
         <li class="room">
             <div class="room-info">
-                <strong>{{.Slug}}</strong>
+                <strong>{{.Slug}}</strong>{{if .Active}}<span class="status status-active">Active</span>{{else}}<span class="status status-inactive">Inactive</span>{{end}}
                 <div class="meta">
                     /m/{{.Slug}}
                     {{if .DialIn}} · PIN: {{.DialIn.PIN}}{{with index .DialIn.Numbers "US"}} · {{index . 0}}{{end}}{{end}}
                 </div>
             </div>
             <div class="room-actions">
-                <form method="POST" action="/admin/rooms/{{.Slug}}/start" style="display:inline">
+                <form method="POST" action="/admin/rooms/{{.Slug}}/start" target="_blank" style="display:inline">
                     <input type="hidden" name="display_name" class="start-name" value="Admin">
                     <button type="submit" class="btn btn-start">Start</button>
                 </form>
+                {{if .Active}}<form method="POST" action="/admin/rooms/{{.Slug}}/stop" style="display:inline">
+                    <button type="submit" class="btn btn-stop">Stop</button>
+                </form>{{end}}
                 <button onclick="copyLink(this, '{{.Slug}}')">Copy Link</button>
                 {{if .DialIn}}<button onclick="copyDialIn(this, '{{.Slug}}', '{{.DialIn.PIN}}', '{{with index .DialIn.Numbers "US"}}{{index . 0}}{{end}}')">Copy Dial-in</button>{{end}}
                 <form method="POST" action="/admin/rooms/{{.Slug}}/delete">

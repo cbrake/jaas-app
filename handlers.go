@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -53,6 +54,7 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /admin/rooms", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleCreateRoom)))
 	mux.Handle("POST /admin/rooms/{slug}/delete", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDeleteRoom)))
 	mux.Handle("POST /admin/rooms/{slug}/start", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStart)))
+	mux.Handle("POST /admin/rooms/{slug}/stop", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStop)))
 	mux.HandleFunc("GET /m/{slug}", app.handleMeeting)
 	mux.HandleFunc("POST /m/{slug}/join", app.handleJoinMeeting)
 	mux.HandleFunc("POST /m/{slug}/end", app.handleEndMeeting)
@@ -83,10 +85,14 @@ func (app *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 type roomView struct {
 	Slug   string
+	Active bool
 	DialIn *DialInInfo
 }
 
 func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	// Auto-expire rooms older than 4 hours
+	app.DB.DeactivateExpiredRooms(4 * time.Hour)
+
 	rooms, err := app.DB.ListRooms()
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -101,7 +107,7 @@ func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	var views []roomView
 	for _, room := range rooms {
-		rv := roomView{Slug: room.Slug}
+		rv := roomView{Slug: room.Slug, Active: room.Active}
 		pin, err := app.DialIn.FetchPIN(app.Config.JaaSAppID, room.Slug)
 		if err != nil {
 			log.Printf("dial-in PIN for %s: %v", room.Slug, err)
@@ -182,7 +188,15 @@ func (app *App) handleAdminStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
 }
 
+func (app *App) handleAdminStop(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	app.DB.SetRoomActive(slug, false)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
 func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
+	app.DB.DeactivateExpiredRooms(4 * time.Hour)
+
 	slug := r.PathValue("slug")
 	room, err := app.DB.GetRoom(slug)
 	if errors.Is(err, ErrNotFound) {

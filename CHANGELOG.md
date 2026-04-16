@@ -8,6 +8,27 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.0.4] - 2025-04-16
+
+### Added
+
+- Room active/inactive status indicator on admin dashboard
+- Stop button on dashboard to manually deactivate active meetings
+- Auto-expire rooms after 4 hours of inactivity (matches JWT expiry)
+- `activated_at` column to track when rooms were activated
+- "Are you the host?" toggle on waiting page for late-arriving hosts
+- Start button opens meeting in a new tab
+
+### Changed
+
+- Join page redesigned: clean guest view with collapsible host section
+- `navigator.sendBeacon` used for meeting end signal (survives page teardown)
+- `beforeunload` handler added as fallback to deactivate room on tab close
+
+### Fixed
+
+- Stale rooms from before `activated_at` migration auto-deactivated on startup
+
 ## [0.0.3] - 2025-04-15
 
 ### Added

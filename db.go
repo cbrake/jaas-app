@@ -40,6 +40,10 @@ func InitDB(dsn string) (*DB, error) {
 		conn.Close()
 		return nil, err
 	}
+	// Add activated_at column if it doesn't exist
+	_, _ = conn.Exec("ALTER TABLE rooms ADD COLUMN activated_at DATETIME")
+	// Deactivate stale rooms from before migration
+	_, _ = conn.Exec("UPDATE rooms SET active = FALSE WHERE active = TRUE AND activated_at IS NULL")
 	return &DB{conn: conn}, nil
 }
 
@@ -96,6 +100,18 @@ func (db *DB) DeleteRoom(slug string) error {
 }
 
 func (db *DB) SetRoomActive(slug string, active bool) error {
-	_, err := db.conn.Exec("UPDATE rooms SET active = ? WHERE slug = ?", active, slug)
+	if active {
+		_, err := db.conn.Exec("UPDATE rooms SET active = ?, activated_at = CURRENT_TIMESTAMP WHERE slug = ?", active, slug)
+		return err
+	}
+	_, err := db.conn.Exec("UPDATE rooms SET active = ?, activated_at = NULL WHERE slug = ?", active, slug)
+	return err
+}
+
+func (db *DB) DeactivateExpiredRooms(maxAge time.Duration) error {
+	_, err := db.conn.Exec(
+		"UPDATE rooms SET active = FALSE, activated_at = NULL WHERE active = TRUE AND activated_at < ?",
+		time.Now().Add(-maxAge),
+	)
 	return err
 }
