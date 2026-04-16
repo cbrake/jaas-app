@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.0.6] - 2025-04-16
+
 ### Fixed
 
 - Recording and transcription timestamps display in user's local timezone

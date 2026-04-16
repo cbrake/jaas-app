@@ -3,6 +3,36 @@
 Internal design documentation for the jaas-app codebase. See
 [README.md](README.md) for setup and configuration.
 
+## 💻 Development
+
+### Prerequisites
+
+- [Go](https://go.dev/) 1.22 or later
+
+### Build from source
+
+```sh
+go build -o jaas-app .
+```
+
+### Run in development
+
+```sh
+go run .
+```
+
+### Tests
+
+```sh
+go test ./...
+```
+
+### Formatting
+
+```sh
+. envsetup.sh && jaas_fmt
+```
+
 ## 🔐 Access Model
 
 Three tiers of access, two passwords:

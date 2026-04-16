@@ -16,11 +16,27 @@ meetings powered by the 8x8 JaaS platform.
 - **Self-update** — `jaas-app update` checks GitHub Releases and replaces the
   binary in-place
 
+## 📦 Install
+
+Download the latest binary from
+[GitHub Releases](https://github.com/cbrake/jaas-app/releases/latest):
+
+```sh
+# Linux (x86_64)
+curl -Lo jaas-app https://github.com/cbrake/jaas-app/releases/latest/download/jaas-app-$(curl -s https://api.github.com/repos/cbrake/jaas-app/releases/latest | grep tag_name | cut -d'"' -f4)-linux-x86_64
+chmod +x jaas-app
+```
+
+To update an existing install:
+
+```sh
+jaas-app update
+```
+
 ## 🚀 Getting Started
 
 ### 📋 Prerequisites
 
-- [Go](https://go.dev/) 1.22 or later
 - A JaaS account and API key from [8x8](https://jaas.8x8.vc/#/)
 
 ### ⚙️ Setup
@@ -29,24 +45,6 @@ Copy the example environment file and fill in your JaaS credentials:
 
 ```sh
 cp .env.example .env
-```
-
-### 💻 Development
-
-```sh
-go run .
-```
-
-### 🔨 Build
-
-```sh
-go build -o jaas-app .
-```
-
-### 🧪 Tests
-
-```sh
-go test ./...
 ```
 
 ## 🔧 Configuration
@@ -82,6 +80,10 @@ go test ./...
 
 See [developers.md](developers.md) for architecture details: routes, data model,
 JWT generation, webhook handling, and meeting lifecycle.
+
+## 🔒 Security
+
+See [security.md](security.md) for a security audit of the application.
 
 ## 📚 Reference
 
