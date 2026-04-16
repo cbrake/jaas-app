@@ -90,6 +90,10 @@
                 document.getElementById('admin_name').value = saved;
                 document.querySelectorAll('.start-name').forEach(function(el) { el.value = saved; });
             }
+            document.querySelectorAll('.local-time').forEach(function(el) {
+                var d = new Date(el.dataset.utc);
+                el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            });
         });
     </script>
 </head>
@@ -146,7 +150,7 @@
             <div class="recordings">
                 <strong>Recordings</strong>
                 <ul>
-                    {{range .Recordings}}<li><a href="{{.DownloadURL}}" target="_blank">{{.CreatedAt.Format "Jan 2 3:04 PM"}}</a>{{if .DurationSec}} ({{.DurationSec}}s){{end}} — expires {{.ExpiresAt.Format "Jan 2 3:04 PM"}}</li>{{end}}
+                    {{range .Recordings}}<li><a href="{{.DownloadURL}}" target="_blank"><span class="local-time" data-utc="{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}"></span></a>{{if .DurationSec}} ({{.DurationSec}}s){{end}} — expires <span class="local-time" data-utc="{{.ExpiresAt.Format "2006-01-02T15:04:05Z"}}"></span></li>{{end}}
                 </ul>
             </div>
             {{end}}
@@ -154,7 +158,7 @@
             <div class="recordings">
                 <strong>Transcriptions</strong>
                 <ul>
-                    {{range .Transcriptions}}<li><a href="/admin/transcriptions/{{.ID}}">{{.CreatedAt.Format "Jan 2 3:04 PM"}}</a></li>{{end}}
+                    {{range .Transcriptions}}<li><a href="/admin/transcriptions/{{.ID}}"><span class="local-time" data-utc="{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}"></span></a></li>{{end}}
                 </ul>
             </div>
             {{end}}

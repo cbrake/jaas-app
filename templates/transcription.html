@@ -24,13 +24,13 @@
 </head>
 <body>
     <h1>{{.Room}}</h1>
-    <p class="meta">{{.Transcription.CreatedAt.Format "January 2, 2006 3:04 PM"}} · <a href="/admin">Back to dashboard</a></p>
+    <p class="meta"><span class="local-time" data-utc="{{.Transcription.CreatedAt.Format "2006-01-02T15:04:05Z"}}"></span> · <a href="/admin">Back to dashboard</a></p>
 
     <div class="messages">
         {{if .Messages}}
         {{range .Messages}}
         <div class="message">
-            <span class="speaker">{{.Name}}</span><span class="time">{{.Timestamp.Format "3:04:05 PM"}}</span>
+            <span class="speaker">{{.Name}}</span><span class="time local-time" data-utc="{{.Timestamp.Format "2006-01-02T15:04:05Z"}}" data-format="time"></span>
             <div class="content">{{.Content}}</div>
         </div>
         {{end}}
@@ -38,5 +38,15 @@
         <p style="color: #666;">No messages in this transcription.</p>
         {{end}}
     </div>
+    <script>
+        document.querySelectorAll('.local-time').forEach(function(el) {
+            var d = new Date(el.dataset.utc);
+            if (el.dataset.format === 'time') {
+                el.textContent = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+            } else {
+                el.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            }
+        });
+    </script>
 </body>
 </html>

@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Recording and transcription timestamps display in user's local timezone
+  instead of server UTC
+
 ## [0.0.5] - 2025-04-16
 
 ### Added
