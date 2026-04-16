@@ -44,3 +44,8 @@ REMOTE
 
 	echo "Done."
 }
+
+# Format all Go source files
+jaas_fmt() {
+	goimports -w . && gofmt -w .
+}
