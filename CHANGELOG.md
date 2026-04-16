@@ -8,6 +8,27 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.0.5] - 2025-04-16
+
+### Added
+
+- Per-room transcription toggle on admin dashboard (controls JWT feature flag)
+- Webhook endpoint (`POST /webhook/recording`) for JaaS recording and
+  transcription events
+- Recordings displayed on dashboard with 24-hour download links from JaaS
+- Transcriptions downloaded from JaaS and stored permanently in SQLite
+- Transcription viewer page (`GET /admin/transcriptions/{id}`) with speaker
+  names and timestamps
+- Webhook setup instructions with copyable URL on admin dashboard
+- Raw webhook payload logging for debugging
+- Responsive mobile layout for admin dashboard
+- Inline copy icons for meeting links and dial-in info
+
+### Changed
+
+- Dashboard room cards restructured: header line with all info, single action
+  row, expandable recordings/transcriptions sections
+
 ## [0.0.4] - 2025-04-16
 
 ### Added

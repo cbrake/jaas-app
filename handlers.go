@@ -2,7 +2,10 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"html/template"
 	"log"
 	"net/http"
@@ -55,9 +58,12 @@ func (app *App) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /admin/rooms/{slug}/delete", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDeleteRoom)))
 	mux.Handle("POST /admin/rooms/{slug}/start", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStart)))
 	mux.Handle("POST /admin/rooms/{slug}/stop", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStop)))
+	mux.Handle("POST /admin/rooms/{slug}/transcription", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleToggleTranscription)))
 	mux.HandleFunc("GET /m/{slug}", app.handleMeeting)
 	mux.HandleFunc("POST /m/{slug}/join", app.handleJoinMeeting)
 	mux.HandleFunc("POST /m/{slug}/end", app.handleEndMeeting)
+	mux.Handle("GET /admin/transcriptions/{id}", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleViewTranscription)))
+	mux.HandleFunc("POST /webhook/recording", app.handleRecordingWebhook)
 }
 
 func (app *App) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -84,9 +90,12 @@ func (app *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 type roomView struct {
-	Slug   string
-	Active bool
-	DialIn *DialInInfo
+	Slug           string
+	Active         bool
+	Transcription  bool
+	DialIn         *DialInInfo
+	Recordings     []Recording
+	Transcriptions []Transcription
 }
 
 func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -107,12 +116,24 @@ func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	var views []roomView
 	for _, room := range rooms {
-		rv := roomView{Slug: room.Slug, Active: room.Active}
+		rv := roomView{Slug: room.Slug, Active: room.Active, Transcription: room.Transcription}
 		pin, err := app.DialIn.FetchPIN(app.Config.JaaSAppID, room.Slug)
 		if err != nil {
 			log.Printf("dial-in PIN for %s: %v", room.Slug, err)
 		} else if numbers != nil {
 			rv.DialIn = &DialInInfo{PIN: pin, Numbers: numbers}
+		}
+		recs, err := app.DB.ListRecordings(room.Slug)
+		if err != nil {
+			log.Printf("recordings for %s: %v", room.Slug, err)
+		} else {
+			rv.Recordings = recs
+		}
+		trans, err := app.DB.ListTranscriptions(room.Slug)
+		if err != nil {
+			log.Printf("transcriptions for %s: %v", room.Slug, err)
+		} else {
+			rv.Transcriptions = trans
 		}
 		views = append(views, rv)
 	}
@@ -163,7 +184,7 @@ func (app *App) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleAdminStart(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
-	_, err := app.DB.GetRoom(slug)
+	room, err := app.DB.GetRoom(slug)
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -180,12 +201,19 @@ func (app *App) handleAdminStart(w http.ResponseWriter, r *http.Request) {
 
 	app.DB.SetRoomActive(slug, true)
 
-	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true)
+	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true, room.Transcription)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
+}
+
+func (app *App) handleToggleTranscription(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	enabled := r.FormValue("enabled") == "on"
+	app.DB.SetTranscription(slug, enabled)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (app *App) handleAdminStop(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +302,7 @@ func (app *App) handleJoinMeeting(w http.ResponseWriter, r *http.Request) {
 
 		app.DB.SetRoomActive(slug, true)
 
-		jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true)
+		jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true, room.Transcription)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
@@ -293,7 +321,7 @@ func (app *App) handleJoinMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, false)
+	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, false, room.Transcription)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -304,5 +332,143 @@ func (app *App) handleJoinMeeting(w http.ResponseWriter, r *http.Request) {
 func (app *App) handleEndMeeting(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	app.DB.SetRoomActive(slug, false)
+	w.WriteHeader(http.StatusOK)
+}
+
+type transcriptMessage struct {
+	Name      string
+	Content   string
+	Timestamp time.Time
+}
+
+func (app *App) handleViewTranscription(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	var id int64
+	fmt.Sscanf(idStr, "%d", &id)
+
+	t, err := app.DB.GetTranscription(id)
+	if errors.Is(err, ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the transcription JSON
+	var raw struct {
+		ConferenceName string `json:"conferenceName"`
+		Messages       []struct {
+			Name      string `json:"name"`
+			Content   string `json:"content"`
+			Timestamp int64  `json:"timestamp"`
+		} `json:"messages"`
+	}
+	json.Unmarshal([]byte(t.Data), &raw)
+
+	var messages []transcriptMessage
+	for _, m := range raw.Messages {
+		messages = append(messages, transcriptMessage{
+			Name:      m.Name,
+			Content:   m.Content,
+			Timestamp: time.UnixMilli(m.Timestamp),
+		})
+	}
+
+	app.render(w, "transcription.html", map[string]any{
+		"Transcription": t,
+		"Messages":      messages,
+		"Room":          raw.ConferenceName,
+	})
+}
+
+func (app *App) handleRecordingWebhook(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("webhook: read body: %v", err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	log.Printf("webhook: received: %s", string(body))
+
+	var payload struct {
+		EventType string `json:"eventType"`
+		Data      struct {
+			PreAuthenticatedLink string `json:"preAuthenticatedLink"`
+			DurationSec          int    `json:"durationSec"`
+			LinkExpiration       int64  `json:"linkExpiration"`
+		} `json:"data"`
+		FQN string `json:"fqn"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		log.Printf("webhook: invalid payload: %v", err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Extract room slug from FQN: "vpaas-xxx/room-slug"
+	roomSlug := ""
+	parts := strings.Split(payload.FQN, "/")
+	if len(parts) >= 2 {
+		roomSlug = parts[len(parts)-1]
+	}
+
+	switch payload.EventType {
+	case "RECORDING_UPLOADED":
+		if payload.Data.PreAuthenticatedLink == "" {
+			log.Printf("webhook: no download link in recording payload")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		expiresAt := time.Now().Add(24 * time.Hour)
+		if payload.Data.LinkExpiration > 0 {
+			expiresAt = time.Unix(payload.Data.LinkExpiration/1000, 0)
+		}
+		if err := app.DB.AddRecording(roomSlug, "recording", payload.Data.PreAuthenticatedLink, expiresAt, payload.Data.DurationSec); err != nil {
+			log.Printf("webhook: save recording: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("webhook: recording saved for room %s (expires %s)", roomSlug, expiresAt.Format(time.RFC3339))
+
+	case "TRANSCRIPTION_UPLOADED":
+		if payload.Data.PreAuthenticatedLink == "" {
+			log.Printf("webhook: no download link in transcription payload")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Download the transcription JSON
+		resp, err := http.Get(payload.Data.PreAuthenticatedLink)
+		if err != nil {
+			log.Printf("webhook: download transcription: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		transcriptBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("webhook: read transcription: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		// Extract sessionId from the transcription JSON
+		var tData struct {
+			SessionID string `json:"sessionId"`
+		}
+		json.Unmarshal(transcriptBody, &tData)
+
+		if err := app.DB.AddTranscription(roomSlug, tData.SessionID, string(transcriptBody)); err != nil {
+			log.Printf("webhook: save transcription: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("webhook: transcription saved for room %s (session %s)", roomSlug, tData.SessionID)
+
+	default:
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }

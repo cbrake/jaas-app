@@ -7,7 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateJWT(key *rsa.PrivateKey, appID, keyID, room, userName string, moderator bool) (string, error) {
+func GenerateJWT(key *rsa.PrivateKey, appID, keyID, room, userName string, moderator, transcription bool) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"aud":  "jitsi",
@@ -24,7 +24,7 @@ func GenerateJWT(key *rsa.PrivateKey, appID, keyID, room, userName string, moder
 			"features": map[string]any{
 				"recording":     moderator,
 				"livestreaming": false,
-				"transcription": false,
+				"transcription": transcription,
 			},
 		},
 	}

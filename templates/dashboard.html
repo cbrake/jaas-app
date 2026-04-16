@@ -10,24 +10,57 @@
         h1 { font-size: 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; }
         h1 form button { background: none; border: none; color: #666; cursor: pointer; font-size: 0.875rem; }
         h2 { font-size: 1.125rem; margin-bottom: 1rem; }
-        .create-form { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 2rem; }
-        .create-form form { display: flex; gap: 0.5rem; }
-        .create-form input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem; }
-        .create-form button { padding: 0.5rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+        .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        .card form { display: flex; gap: 0.5rem; }
+        .card input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem; }
+        .card button { padding: 0.5rem 1rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+
         .room-list { list-style: none; }
-        .room { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        .room-info strong { font-size: 1rem; }
-        .status { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 9999px; margin-left: 0.5rem; vertical-align: middle; }
-        .status-active { background: #dcfce7; color: #16a34a; }
-        .status-inactive { background: #f3f4f6; color: #9ca3af; }
-        .room-info .meta { color: #666; font-size: 0.8rem; margin-top: 0.25rem; }
-        .room-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .room { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 0.75rem; }
+        .room-header { line-height: 1.6; }
+        .room-header strong { font-size: 1rem; }
+        .room-meta { color: #666; font-size: 0.8rem; }
+        .copy-icon { cursor: pointer; font-size: 0.75rem; opacity: 0.5; }
+        .copy-icon:hover { opacity: 1; }
+        .room-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; }
         .room-actions button, .room-actions .btn { padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; border: 1px solid #ddd; background: #fff; text-decoration: none; color: inherit; }
         .room-actions .btn-start { background: #16a34a; color: #fff; border-color: #16a34a; }
         .room-actions .btn-stop { background: #f59e0b; color: #fff; border-color: #f59e0b; }
         .room-actions .btn-danger { color: #dc2626; border-color: #dc2626; }
+        .status { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 9999px; margin-left: 0.5rem; vertical-align: middle; }
+        .status-active { background: #dcfce7; color: #16a34a; }
+        .status-inactive { background: #f3f4f6; color: #9ca3af; }
+
+        .recordings { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #eee; font-size: 0.8rem; }
+        .recordings strong { font-size: 0.8rem; }
+        .recordings ul { list-style: none; margin-top: 0.25rem; }
+        .recordings li { margin-bottom: 0.25rem; color: #666; }
+        .recordings a { color: #2563eb; text-decoration: none; }
+        .recordings a:hover { text-decoration: underline; }
+        .rec-kind { display: inline-block; font-size: 0.65rem; padding: 0.1rem 0.35rem; border-radius: 3px; background: #e5e7eb; color: #555; text-transform: capitalize; }
+
         .empty { color: #666; text-align: center; padding: 2rem; }
         .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; }
+
+        .setup-info { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 2rem; font-size: 0.85rem; color: #666; }
+        .setup-info h2 { font-size: 1rem; color: #333; margin-bottom: 0.75rem; }
+        .setup-info ol { margin: 0.5rem 0 0.75rem 1.25rem; }
+        .setup-info li { margin-bottom: 0.25rem; }
+        .setup-info code { background: #f3f4f6; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.8rem; }
+        .setup-info a { color: #2563eb; text-decoration: none; }
+        .setup-info a:hover { text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            body { padding: 1rem; }
+            .card form { flex-direction: column; }
+            .card input { flex: none; width: 100%; }
+            .card button { width: 100%; }
+            .room { padding: 1rem; }
+            .room-actions { gap: 0.4rem; }
+            .room-actions button, .room-actions .btn { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+            .room-meta { word-break: break-all; }
+            .setup-info code { word-break: break-all; }
+        }
     </style>
     <script>
         function flashButton(btn, msg) {
@@ -36,14 +69,15 @@
             btn.disabled = true;
             setTimeout(function() { btn.textContent = orig; btn.disabled = false; }, 1500);
         }
-        function copyLink(btn, slug) {
-            navigator.clipboard.writeText(window.location.origin + '/m/' + slug);
-            flashButton(btn, 'Copied!');
+        function flashIcon(el) {
+            var orig = el.textContent;
+            el.textContent = '✓';
+            setTimeout(function() { el.textContent = orig; }, 1500);
         }
-        function copyDialIn(btn, slug, pin, usNumber) {
+        function copyDialIn2(el, slug, pin, usNumber) {
             var text = 'Join by phone: ' + usNumber + '\nPIN: ' + pin + '\nOr join online: ' + window.location.origin + '/m/' + slug;
             navigator.clipboard.writeText(text);
-            flashButton(btn, 'Copied!');
+            flashIcon(el);
         }
         function saveName() {
             var name = document.getElementById('admin_name').value.trim();
@@ -65,7 +99,7 @@
         <form method="POST" action="/admin/logout"><button type="submit">Log out</button></form>
     </h1>
 
-    <div class="create-form" style="margin-bottom: 1rem;">
+    <div class="card">
         <h2>Settings</h2>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
             <label for="admin_name" style="white-space: nowrap; font-size: 0.875rem;">Your Name</label>
@@ -73,7 +107,7 @@
         </div>
     </div>
 
-    <div class="create-form">
+    <div class="card">
         <h2>Create New Room</h2>
         {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
         <form method="POST" action="/admin/rooms">
@@ -89,12 +123,9 @@
     <ul class="room-list">
         {{range .Rooms}}
         <li class="room">
-            <div class="room-info">
+            <div class="room-header">
                 <strong>{{.Slug}}</strong>{{if .Active}}<span class="status status-active">Active</span>{{else}}<span class="status status-inactive">Inactive</span>{{end}}
-                <div class="meta">
-                    /m/{{.Slug}}
-                    {{if .DialIn}} · PIN: {{.DialIn.PIN}}{{with index .DialIn.Numbers "US"}} · {{index . 0}}{{end}}{{end}}
-                </div>
+                <span class="room-meta"> · /m/{{.Slug}} <span class="copy-icon" onclick="navigator.clipboard.writeText(window.location.origin + '/m/{{.Slug}}'); flashIcon(this)" title="Copy meeting link">📋</span>{{if .DialIn}} · {{with index .DialIn.Numbers "US"}}{{index . 0}}{{end}} · PIN: {{.DialIn.PIN}} <span class="copy-icon" onclick="copyDialIn2(this, '{{.Slug}}', '{{.DialIn.PIN}}', '{{with index .DialIn.Numbers "US"}}{{index . 0}}{{end}}')" title="Copy dial-in info">📋</span>{{end}}</span>
             </div>
             <div class="room-actions">
                 <form method="POST" action="/admin/rooms/{{.Slug}}/start" target="_blank" style="display:inline">
@@ -104,17 +135,51 @@
                 {{if .Active}}<form method="POST" action="/admin/rooms/{{.Slug}}/stop" style="display:inline">
                     <button type="submit" class="btn btn-stop">Stop</button>
                 </form>{{end}}
-                <button onclick="copyLink(this, '{{.Slug}}')">Copy Link</button>
-                {{if .DialIn}}<button onclick="copyDialIn(this, '{{.Slug}}', '{{.DialIn.PIN}}', '{{with index .DialIn.Numbers "US"}}{{index . 0}}{{end}}')">Copy Dial-in</button>{{end}}
-                <form method="POST" action="/admin/rooms/{{.Slug}}/delete">
+                <form method="POST" action="/admin/rooms/{{.Slug}}/transcription" style="display:inline">
+                    <label style="font-size:0.8rem; cursor:pointer;"><input type="checkbox" name="enabled" {{if .Transcription}}checked{{end}} onchange="this.form.submit()"> Transcription</label>
+                </form>
+                <form method="POST" action="/admin/rooms/{{.Slug}}/delete" style="display:inline">
                     <button type="submit" class="btn-danger" onclick="return confirm('Delete {{.Slug}}?')">Delete</button>
                 </form>
             </div>
+            {{if .Recordings}}
+            <div class="recordings">
+                <strong>Recordings</strong>
+                <ul>
+                    {{range .Recordings}}<li><a href="{{.DownloadURL}}" target="_blank">{{.CreatedAt.Format "Jan 2 3:04 PM"}}</a>{{if .DurationSec}} ({{.DurationSec}}s){{end}} — expires {{.ExpiresAt.Format "Jan 2 3:04 PM"}}</li>{{end}}
+                </ul>
+            </div>
+            {{end}}
+            {{if .Transcriptions}}
+            <div class="recordings">
+                <strong>Transcriptions</strong>
+                <ul>
+                    {{range .Transcriptions}}<li><a href="/admin/transcriptions/{{.ID}}">{{.CreatedAt.Format "Jan 2 3:04 PM"}}</a></li>{{end}}
+                </ul>
+            </div>
+            {{end}}
         </li>
         {{end}}
     </ul>
     {{else}}
     <p class="empty">No rooms yet. Create one above.</p>
     {{end}}
+
+    <div class="setup-info">
+        <h2>Webhook Setup</h2>
+        <p>To receive recording and transcription links on this page, configure a webhook in the
+        <a href="https://jaas.8x8.vc" target="_blank">JaaS Console</a>:</p>
+        <ol>
+            <li>Go to <strong>Webhooks</strong> in the JaaS Console</li>
+            <li>Click <strong>Add endpoint</strong></li>
+            <li>Set the URL to: <code id="webhook-url"></code> <span style="cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('webhook-url').textContent); this.textContent='Copied!'; setTimeout(function(){this.textContent='📋'}.bind(this),1500)" title="Copy URL">📋</span></li>
+            <li>Select the <strong>RECORDING_UPLOADED</strong> and <strong>TRANSCRIPTION_UPLOADED</strong> events</li>
+            <li>Save</li>
+        </ol>
+        <p>Recording and transcription download links expire after 24 hours.</p>
+    </div>
+    <script>
+        document.getElementById('webhook-url').textContent = window.location.origin + '/webhook/recording';
+    </script>
 </body>
 </html>
