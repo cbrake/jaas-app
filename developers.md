@@ -27,9 +27,9 @@ Three tiers of access, two passwords:
 2. **Login** (`/admin/login`) — single password field, sets session cookie,
    redirects to dashboard.
 3. **Admin dashboard** (`/admin`) — create-room form (slug + host password),
-   room list with status, start/stop controls, transcription toggle,
-   recordings with download links and expiry, transcription links, and
-   webhook setup info. Requires admin cookie.
+   room list with status, start/stop controls, transcription toggle, recordings
+   with download links and expiry, transcription links, and webhook setup info.
+   Requires admin cookie.
 4. **Join** (`/m/{slug}`) — asks for a display name; an "Are you the host?"
    toggle reveals the host password field.
 5. **Waiting room** — shown when a guest joins before a host has started the
@@ -135,8 +135,8 @@ Configure the webhook URL in your JaaS console to point at
 2. Admin shares `/m/{slug}` with participants.
 3. Visitors see the join page; guests who join before a host see a waiting room
    that auto-refreshes.
-4. A host enters the host password on the join page (or an admin clicks Start
-   on the dashboard), which starts the meeting (`active=true`) and returns a
+4. A host enters the host password on the join page (or an admin clicks Start on
+   the dashboard), which starts the meeting (`active=true`) and returns a
    moderator JWT.
 5. Subsequent visitors enter a display name and join directly with a guest JWT.
 6. When the meeting ends, the iframe `readyToClose` event marks the room
@@ -145,9 +145,9 @@ Configure the webhook URL in your JaaS console to point at
 
 ## 🔄 Self-Update
 
-Run `jaas-app update` to check for a newer release on GitHub. If one exists,
-the binary downloads the platform-appropriate asset and atomically replaces
-itself. The version is embedded at build time via `-ldflags`.
+Run `jaas-app update` to check for a newer release on GitHub. If one exists, the
+binary downloads the platform-appropriate asset and atomically replaces itself.
+The version is embedded at build time via `-ldflags`.
 
 ## 📞 Phone Dial-In Internals
 

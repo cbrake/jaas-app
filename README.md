@@ -51,15 +51,15 @@ go test ./...
 
 ## 🔧 Configuration
 
-| Variable            | Required | Default    | Description                                       |
-| ------------------- | -------- | ---------- | ------------------------------------------------- |
-| `JAAS_APP_ID`       | Yes      |            | Your JaaS application ID                          |
-| `JAAS_API_KEY_ID`   | Yes      |            | Your JaaS API key ID (used as JWT `kid` header)   |
-| `JAAS_API_KEY_PATH` | Yes      |            | Path to RSA private key PEM file (PKCS8 or PKCS1) |
-| `ADMIN_PASSWORD`    | Yes      |            | Password to access the admin dashboard            |
-| `SESSION_SECRET`    | Yes      |            | Secret used to sign session cookies (HMAC-SHA256) |
-| `LISTEN_ADDR`       | No       | `:8370`    | TCP address the HTTP server binds to              |
-| `DB_PATH`           | No       | `./jaas.db`| Path to the SQLite database file                  |
+| Variable            | Required | Default     | Description                                       |
+| ------------------- | -------- | ----------- | ------------------------------------------------- |
+| `JAAS_APP_ID`       | Yes      |             | Your JaaS application ID                          |
+| `JAAS_API_KEY_ID`   | Yes      |             | Your JaaS API key ID (used as JWT `kid` header)   |
+| `JAAS_API_KEY_PATH` | Yes      |             | Path to RSA private key PEM file (PKCS8 or PKCS1) |
+| `ADMIN_PASSWORD`    | Yes      |             | Password to access the admin dashboard            |
+| `SESSION_SECRET`    | Yes      |             | Secret used to sign session cookies (HMAC-SHA256) |
+| `LISTEN_ADDR`       | No       | `:8370`     | TCP address the HTTP server binds to              |
+| `DB_PATH`           | No       | `./jaas.db` | Path to the SQLite database file                  |
 
 ## 🔐 How It Works
 
@@ -73,8 +73,8 @@ go test ./...
   displayed on the join page — no extra setup required.
 - **Recordings** are delivered via JaaS webhooks and shown in the admin
   dashboard with time-limited download links.
-- **Transcriptions** can be enabled per-room; parsed transcripts are viewable
-  in the admin panel.
+- **Transcriptions** can be enabled per-room; parsed transcripts are viewable in
+  the admin panel.
 - **Self-update** — run `jaas-app update` to check GitHub Releases and replace
   the binary in-place.
 

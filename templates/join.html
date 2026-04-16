@@ -1,41 +1,130 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Slug}} — Join</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .card { background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
-        .subtitle { color: #888; font-size: 0.875rem; margin-bottom: 1.5rem; }
-        input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 0.75rem; }
-        .btn-join { width: 100%; padding: 0.625rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
-        .btn-join:hover { background: #1d4ed8; }
-        .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 0.75rem; }
-        .host-toggle { color: #888; font-size: 0.8rem; cursor: pointer; margin-top: 1rem; display: inline-block; }
-        .host-toggle:hover { color: #2563eb; }
-        .host-section { display: none; border-top: 1px solid #eee; padding-top: 1rem; margin-top: 0.75rem; }
-        .host-section.open { display: block; }
-        .host-section p { color: #666; font-size: 0.8rem; margin-bottom: 0.5rem; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <img src="/static/logo.svg" alt="BEC Systems" style="width: 120px; margin-bottom: 1rem;">
-        <h1>{{.Slug}}</h1>
-        <p class="subtitle">Enter your name to join the meeting</p>
-        {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-        <form method="POST" action="/m/{{.Slug}}/join">
-            <input type="text" name="display_name" placeholder="Your name" autofocus required autocomplete="name">
-            <button type="submit" class="btn-join">Join Meeting</button>
-            <span class="host-toggle" onclick="document.getElementById('host-section').classList.toggle('open')">Are you the host?</span>
-            <div id="host-section" class="host-section{{if .Error}} open{{end}}">
-                <p>Enter password to start or cohost the meeting.</p>
-                <input type="text" name="host_password" placeholder="Host password" autocomplete="off">
-            </div>
-        </form>
-    </div>
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>{{.Slug}} — Join</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+			body {
+				font-family: system-ui, sans-serif;
+				background: #f5f5f5;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				min-height: 100vh;
+			}
+			.card {
+				background: #fff;
+				border-radius: 8px;
+				padding: 2rem;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+				width: 100%;
+				max-width: 400px;
+				text-align: center;
+			}
+			h1 {
+				font-size: 1.25rem;
+				margin-bottom: 0.5rem;
+			}
+			.subtitle {
+				color: #888;
+				font-size: 0.875rem;
+				margin-bottom: 1.5rem;
+			}
+			input {
+				width: 100%;
+				padding: 0.5rem 0.75rem;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				font-size: 1rem;
+				margin-bottom: 0.75rem;
+			}
+			.btn-join {
+				width: 100%;
+				padding: 0.625rem;
+				background: #2563eb;
+				color: #fff;
+				border: none;
+				border-radius: 4px;
+				font-size: 1rem;
+				cursor: pointer;
+			}
+			.btn-join:hover {
+				background: #1d4ed8;
+			}
+			.error {
+				color: #dc2626;
+				font-size: 0.875rem;
+				margin-bottom: 0.75rem;
+			}
+			.host-toggle {
+				color: #888;
+				font-size: 0.8rem;
+				cursor: pointer;
+				margin-top: 1rem;
+				display: inline-block;
+			}
+			.host-toggle:hover {
+				color: #2563eb;
+			}
+			.host-section {
+				display: none;
+				border-top: 1px solid #eee;
+				padding-top: 1rem;
+				margin-top: 0.75rem;
+			}
+			.host-section.open {
+				display: block;
+			}
+			.host-section p {
+				color: #666;
+				font-size: 0.8rem;
+				margin-bottom: 0.5rem;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<img
+				src="/static/logo.svg"
+				alt="BEC Systems"
+				style="width: 120px; margin-bottom: 1rem"
+			/>
+			<h1>{{.Slug}}</h1>
+			<p class="subtitle">Enter your name to join the meeting</p>
+			{{if .Error}}
+			<p class="error">{{.Error}}</p>
+			{{end}}
+			<form method="POST" action="/m/{{.Slug}}/join">
+				<input
+					type="text"
+					name="display_name"
+					placeholder="Your name"
+					autofocus
+					required
+					autocomplete="name"
+				/>
+				<button type="submit" class="btn-join">Join Meeting</button>
+				<span
+					class="host-toggle"
+					onclick="document.getElementById('host-section').classList.toggle('open')"
+					>Are you the host?</span
+				>
+				<div id="host-section" class="host-section{{if .Error}} open{{end}}">
+					<p>Enter password to start or cohost the meeting.</p>
+					<input
+						type="text"
+						name="host_password"
+						placeholder="Host password"
+						autocomplete="off"
+					/>
+				</div>
+			</form>
+		</div>
+	</body>
 </html>

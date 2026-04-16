@@ -48,4 +48,5 @@ REMOTE
 # Format all Go source files
 jaas_fmt() {
 	goimports -w . && gofmt -w .
+	prettier --write "**/*.md"
 }
