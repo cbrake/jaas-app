@@ -4,12 +4,20 @@ A web application for hosting [Jitsi as a Service](https://jaas.8x8.vc/#/)
 meetings. It provides a simple interface for creating and managing video
 meetings powered by the 8x8 JaaS platform.
 
+The meeting flow is simple:
+
+- A "room" is created by an admin with a URL and password specific to that room.
+- Anyone with the room password can start the meeting and join as moderator. The
+  meeting can also be started from the admin dashboard.
+- Everyone else can join with just the URL once the meeting has been started.
+
 ## 🤔 Why I built this
 
-- 🔗 Want a system where people can join a call with only a URL in a browser.
+- 🔗 Want a system where people can join a call with only a URL in a browser. No
+  app to install, no holding pen, no passwords.
 - 👥 Multiple people can host the call if the original admin can’t show up.
-- 🐢 On rare instances, the free Jitsi servers get overloaded, which is
-  inconvenient.
+- 🐢 On rare instances, the free Jitsi servers (what I had been using) get
+  overloaded, which is inconvenient. The 8x8 JAAS service is more reliable.
 - 📝 Use 8x8 transcribing service. Easy to summarize by pasting into Claude, but
   could automate this too.
 - 🖥️ Can host it on any small server that can run a Go app. 8x8 does the heavy
