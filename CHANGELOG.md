@@ -12,9 +12,18 @@ and this project adheres to
 
 ### Added
 
+- Version number displayed on the admin dashboard and join pages via a `version`
+  template function
 - Security audit (`security.md`) documenting known findings across the
   authentication, webhook, and JWT paths
+- README install instructions for downloading a release binary from GitHub
 - README sections describing the meeting flow and the motivation for the project
+
+### Changed
+
+- Development instructions (build, run, test, format) moved from `README.md` to
+  `developers.md`, leaving the README focused on installing and configuring the
+  application
 
 ### Removed
 
