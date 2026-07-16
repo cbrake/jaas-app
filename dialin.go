@@ -80,15 +80,3 @@ func (c *DialInClient) FetchDIDs() (map[string][]string, error) {
 	}
 	return numbers, nil
 }
-
-func (c *DialInClient) FetchDialInInfo(appID, room string) (*DialInInfo, error) {
-	pin, err := c.FetchPIN(appID, room)
-	if err != nil {
-		return nil, err
-	}
-	numbers, err := c.FetchDIDs()
-	if err != nil {
-		return nil, err
-	}
-	return &DialInInfo{PIN: pin, Numbers: numbers}, nil
-}
