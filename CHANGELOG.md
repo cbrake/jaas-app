@@ -8,6 +8,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-16
+
+### Added
+
+- Security audit (`security.md`) documenting known findings across the
+  authentication, webhook, and JWT paths
+- README sections describing the meeting flow and the motivation for the project
+
+### Removed
+
+- Dial-in numbers and PIN from the meeting page — they remain available on the
+  admin dashboard
+
 ## [0.0.6] - 2025-04-16
 
 ### Fixed

@@ -22,8 +22,12 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
+var templateFuncs = template.FuncMap{
+	"version": func() string { return version },
+}
+
 func (app *App) loadTemplates() error {
-	t, err := template.ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return err
 	}
@@ -250,19 +254,12 @@ func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var dialIn *DialInInfo
-	info, err := app.DialIn.FetchDialInInfo(app.Config.JaaSAppID, slug)
-	if err == nil {
-		dialIn = info
-	}
-
 	app.render(w, "meeting.html", map[string]any{
 		"Slug":        slug,
 		"AppID":       app.Config.JaaSAppID,
 		"JWT":         jwtToken,
 		"IsModerator": isModerator,
 		"DisplayName": displayName,
-		"DialIn":      dialIn,
 	})
 }
 

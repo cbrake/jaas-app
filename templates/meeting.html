@@ -19,12 +19,6 @@
 				width: 100%;
 				height: 100vh;
 			}
-			.dialin {
-				background: #111;
-				padding: 0.75rem 1.5rem;
-				font-size: 0.85rem;
-				color: #aaa;
-			}
 		</style>
 		<script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
 		<script>
@@ -36,12 +30,6 @@
 	</head>
 	<body>
 		<div id="meet"></div>
-		{{if .DialIn}}
-		<div class="dialin">
-			&#x1F4DE; Dial-in: {{range $country, $nums := .DialIn.Numbers}}{{range
-			$nums}}{{.}} {{end}}{{end}} · PIN: {{.DialIn.PIN}}
-		</div>
-		{{end}}
 
 		<script>
 			var api = new JitsiMeetExternalAPI('8x8.vc', {
