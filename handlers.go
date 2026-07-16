@@ -22,8 +22,12 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
+var templateFuncs = template.FuncMap{
+	"version": func() string { return version },
+}
+
 func (app *App) loadTemplates() error {
-	t, err := template.ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return err
 	}

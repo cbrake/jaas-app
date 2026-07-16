@@ -41,6 +41,7 @@
 
         .empty { color: #666; text-align: center; padding: 2rem; }
         .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1rem; }
+        .version { color: #9ca3af; font-size: 0.75rem; text-align: center; margin-top: 2rem; }
 
         .setup-info { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 2rem; font-size: 0.85rem; color: #666; }
         .setup-info h2 { font-size: 1rem; color: #333; margin-bottom: 0.75rem; }
@@ -182,6 +183,8 @@
         </ol>
         <p>Recording and transcription download links expire after 24 hours.</p>
     </div>
+
+    <p class="version">jaas-app {{version}}</p>
     <script>
         document.getElementById('webhook-url').textContent = window.location.origin + '/webhook/recording';
     </script>
