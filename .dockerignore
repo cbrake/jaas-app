@@ -1,0 +1,6 @@
+.git
+.env
+*.db
+*.pk
+jaas-app
+deploy/env

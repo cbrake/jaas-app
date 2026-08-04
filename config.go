@@ -29,17 +29,24 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("JAAS_API_KEY_ID is required")
 	}
 
-	keyPath := os.Getenv("JAAS_API_KEY_PATH")
-	if keyPath == "" {
-		return nil, fmt.Errorf("JAAS_API_KEY_PATH is required")
+	// The key may be supplied inline (convenient for container platforms that
+	// only offer environment secrets) or as a path to a PEM file.
+	keyData := []byte(os.Getenv("JAAS_API_KEY"))
+	if len(keyData) == 0 {
+		keyPath := os.Getenv("JAAS_API_KEY_PATH")
+		if keyPath == "" {
+			return nil, fmt.Errorf("JAAS_API_KEY or JAAS_API_KEY_PATH is required")
+		}
+		var err error
+		keyData, err = os.ReadFile(keyPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading JAAS_API_KEY_PATH: %w", err)
+		}
 	}
-	keyData, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading JAAS_API_KEY_PATH: %w", err)
-	}
+
 	block, _ := pem.Decode(keyData)
 	if block == nil {
-		return nil, fmt.Errorf("no PEM block found in %s", keyPath)
+		return nil, fmt.Errorf("no PEM block found in the JaaS API key")
 	}
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {

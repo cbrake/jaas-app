@@ -1,0 +1,30 @@
+# Example Fly.io configuration. Copy to fly.toml in the repo root, set your own
+# app name and primary region, then:
+#
+#   fly volumes create jaas_data --size 1 --region <region>
+#   fly secrets set JAAS_APP_ID=... JAAS_API_KEY_ID=... ADMIN_PASSWORD=... \
+#       SESSION_SECRET=... JAAS_API_KEY="$(cat jaas-api-key.pk)"
+#   fly deploy
+#
+# Run a single machine: SQLite on a volume cannot be shared between machines.
+
+app = "jaas-app"
+primary_region = "ord"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+LISTEN_ADDR = ":8370"
+DB_PATH = "/data/jaas.db"
+
+[mounts]
+source = "jaas_data"
+destination = "/data"
+
+[http_service]
+internal_port = 8370
+force_https = true
+auto_stop_machines = false
+auto_start_machines = true
+min_machines_running = 1

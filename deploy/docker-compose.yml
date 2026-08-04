@@ -1,0 +1,16 @@
+services:
+  jaas-app:
+    build:
+      context: ..
+    # Or use a prebuilt image instead of building locally:
+    # image: ghcr.io/cbrake/jaas-app:latest
+    restart: unless-stopped
+    ports:
+      - "8370:8370"
+    env_file:
+      - ./env
+    volumes:
+      - jaas-data:/data
+
+volumes:
+  jaas-data:
