@@ -170,8 +170,8 @@ separately.
 
 ## 🔐 How It Works
 
-- **Admin** logs in at `/admin` with the admin password to create and manage
-  rooms.
+- **Admin** logs in at `/admin` with the admin password to create/manage rooms
+  and start meetings.
 - **Host** receives a meeting link (`/m/{slug}`) and starts the meeting by
   entering the room's host password.
 - **Guests** join with just the link — no account or password needed once a host
