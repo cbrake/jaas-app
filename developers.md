@@ -7,7 +7,8 @@ Internal design documentation for the jaas-app codebase. See
 
 ### Prerequisites
 
-- [Go](https://go.dev/) 1.22 or later
+- [Go](https://go.dev/) 1.26 or later (or Docker:
+  `docker build --target test .`)
 
 ### Build from source
 
@@ -37,14 +38,16 @@ go test ./...
 
 Three tiers of access, two passwords:
 
-| Role      | Access                                                                          | Credential                                |
-| --------- | ------------------------------------------------------------------------------- | ----------------------------------------- |
-| **Admin** | Create/delete rooms, start/stop meetings, manage transcription, view recordings | Admin password (env var, one for the app) |
-| **Host**  | Start a meeting, get moderator JWT                                              | Per-room host password (set at creation)  |
-| **Guest** | Join an active meeting                                                          | Just the link `/m/{slug}`                 |
+| Role      | Access                                                                                      | Credential                                                            |
+| --------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Admin** | Create/delete rooms, start/stop meetings, manage transcription, view recordings and minutes | Hashed admin password, or Cloudflare Access identity (per-user rooms) |
+| **Host**  | Start a meeting, get moderator JWT                                                          | Per-room host password (set at creation)                              |
+| **Guest** | Join an active meeting                                                                      | Just the link `/m/{slug}`                                             |
 
-- Admin password is checked via a login form and stored in a signed session
-  cookie (HttpOnly, 7-day lifetime).
+- Admin sign-in creates a random server-side session (`__Host-` cookie, 2 h idle
+  / 12 h absolute, revocable) with its own CSRF token. With Cloudflare Access
+  configured, the Access JWT is verified instead and rooms are scoped to the
+  signed-in e-mail.
 - Host password can be entered on the join page — a POST validates it and
   returns a moderator JWT.
 - Guests need nothing — once a host has started the meeting, guests join
@@ -74,27 +77,38 @@ Three tiers of access, two passwords:
 
 ## 🛤️ Routes
 
-| Method | Path                                | Auth   | Behavior                                                        |
-| ------ | ----------------------------------- | ------ | --------------------------------------------------------------- |
-| GET    | `/`                                 | none   | Public home page                                                |
-| GET    | `/admin/login`                      | none   | Render login form                                               |
-| POST   | `/admin/login`                      | none   | Validate admin password, set cookie, redirect to `/admin`       |
-| POST   | `/admin/logout`                     | cookie | Clear cookie, redirect to `/admin/login`                        |
-| GET    | `/admin`                            | cookie | Render admin dashboard                                          |
-| POST   | `/admin/rooms`                      | cookie | Create room (slug + host password), redirect to `/admin`        |
-| POST   | `/admin/rooms/{slug}/delete`        | cookie | Delete room, redirect to `/admin`                               |
-| POST   | `/admin/rooms/{slug}/start`         | cookie | Admin-start a meeting, redirect to `/admin`                     |
-| POST   | `/admin/rooms/{slug}/stop`          | cookie | Admin-stop a meeting, redirect to `/admin`                      |
-| POST   | `/admin/rooms/{slug}/transcription` | cookie | Toggle transcription for a room                                 |
-| GET    | `/admin/transcriptions/{id}`        | cookie | View a parsed transcription                                     |
-| GET    | `/m/{slug}`                         | none   | Join page (or meeting iframe if JWT present)                    |
-| POST   | `/m/{slug}/join`                    | none   | Validate host password or join as guest; start or enter meeting |
-| POST   | `/m/{slug}/end`                     | none   | Mark room inactive (called by iframe `readyToClose`)            |
-| POST   | `/webhook/recording`                | none   | Receive recording/transcription webhooks from JaaS              |
+| Method   | Path                                | Auth        | Behavior                                                        |
+| -------- | ----------------------------------- | ----------- | --------------------------------------------------------------- |
+| GET      | `/`                                 | none        | Public home page                                                |
+| GET      | `/admin/login`                      | none        | Render login form                                               |
+| POST     | `/admin/login`                      | none        | Validate admin password, set cookie, redirect to `/admin`       |
+| POST     | `/admin/logout`                     | cookie      | Clear cookie, redirect to `/admin/login`                        |
+| GET      | `/admin`                            | cookie      | Render admin dashboard                                          |
+| POST     | `/admin/rooms`                      | cookie      | Create room (slug + host password), redirect to `/admin`        |
+| POST     | `/admin/rooms/{slug}/delete`        | cookie      | Delete room, redirect to `/admin`                               |
+| POST     | `/admin/rooms/{slug}/start`         | cookie      | Admin-start a meeting, redirect to `/admin`                     |
+| POST     | `/admin/rooms/{slug}/stop`          | cookie      | Admin-stop a meeting, redirect to `/admin`                      |
+| POST     | `/admin/rooms/{slug}/transcription` | cookie      | Toggle transcription for a room                                 |
+| GET      | `/admin/transcriptions/{id}`        | cookie      | View a parsed transcription                                     |
+| GET      | `/m/{slug}`                         | none        | Join page (or meeting iframe if JWT present)                    |
+| POST     | `/m/{slug}/join`                    | none        | Validate host password or join as guest; start or enter meeting |
+| POST     | `/m/{slug}/end`                     | none        | Mark room inactive (called by iframe `readyToClose`)            |
+| POST     | `/m/{slug}/audio`                   | participant | Browser-microphone audio chunk (transcribed rooms)              |
+| POST     | `/webhook/recording`                | signature   | Receive JaaS webhooks (verified `X-Jaas-Signature`)             |
+| GET      | `/admin/minutes/{id}`               | cookie      | View a minutes draft and approve recipients                     |
+| GET      | `/admin/minutes/{id}/download`      | cookie      | Markdown (or `?format=json`)                                    |
+| POST     | `/admin/minutes/{id}/retry`         | cookie      | Queue a failed draft again                                      |
+| POST     | `/admin/minutes/{id}/send`          | cookie      | E-mail the approved participants                                |
+| GET/POST | `/admin/password`                   | cookie      | Change the admin password                                       |
+| GET      | `/healthz`                          | none        | Liveness and database check                                     |
 
 ## 🗃️ Data Model
 
-SQLite database with three tables:
+SQLite (WAL) with schema migrations by `PRAGMA user_version`. Besides the tables
+below there are `minutes`, `webhook_events`, `admin_credentials`,
+`admin_sessions`, `participant_sessions`, `session_participants`,
+`minutes_deliveries`, `host_notifications`, `capture_runs` and `audio_streams`;
+see `db.go`. The original three tables:
 
 ```sql
 CREATE TABLE rooms (
@@ -152,8 +166,17 @@ JaaS sends webhook events to `POST /webhook/recording`:
 - **`RECORDING_UPLOADED`** — stores the download URL, duration, and expiry in
   the `recordings` table. Links default to 24-hour expiry if not provided.
   Expired recordings are filtered out of the dashboard.
-- **`TRANSCRIPTION_UPLOADED`** — downloads the transcript JSON from the
-  pre-authenticated link and stores it in the `transcriptions` table.
+- **`TRANSCRIPTION_UPLOADED`** — queues a minutes job unique per
+  `(room_slug, session_id)`; the worker downloads the transcript from the
+  pre-authenticated link (https, allow-listed hosts, public IPs only, size and
+  time limits), stores it in `transcriptions` and, with an OpenAI key, drafts
+  the minutes.
+- **`PARTICIPANT_JOINED`** — records who was in the session, so the host can
+  approve e-mail copies.
+
+Every webhook must carry a valid `X-Jaas-Signature`
+(`t=…,v1=base64(HMAC-SHA256(secret, t + "." + body))`); events are de-duplicated
+by `idempotencyKey`.
 
 The room slug is extracted from the `fqn` field (`vpaas-xxx/room-slug`).
 Configure the webhook URL in your JaaS console to point at
@@ -176,8 +199,9 @@ Configure the webhook URL in your JaaS console to point at
 ## 🔄 Self-Update
 
 Run `jaas-app update` to check for a newer release on GitHub. If one exists, the
-binary downloads the platform-appropriate asset and atomically replaces itself.
-The version is embedded at build time via `-ldflags`.
+binary downloads the platform-appropriate asset, checks its SHA-256 against the
+release's `jaas-app_<version>_checksums.txt` and only then atomically replaces
+itself. The version is embedded at build time via `-ldflags`.
 
 ## 📞 Phone Dial-In Internals
 

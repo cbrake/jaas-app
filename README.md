@@ -31,10 +31,21 @@ The meeting flow is simple:
 - **Recording** — record meetings; download links delivered via webhook
 - **Transcription** — enable per-room transcription; view parsed transcripts in
   the admin panel
+- **AI meeting minutes (optional)** — with an OpenAI API key, each transcript
+  becomes a draft with summary, key points, decisions, action items, risks, open
+  questions and a text-plus-participation sentiment analysis; the host reviews
+  it and approves who receives it by e-mail
+- **Transcription without the JaaS premium feature (optional)** — each
+  participant's browser records only their own microphone (never while muted)
+  and OpenAI speech-to-text turns it into a speaker-labelled transcript
 - **Phone dial-in** — allow participants to join via phone call (provided by
   8x8, no SIP configuration required)
-- **Self-update** — `jaas-app update` checks GitHub Releases and replaces the
-  binary in-place
+- **Per-user rooms behind Cloudflare Access (optional)** — each signed-in person
+  sees only their own rooms; `ADMIN_EMAILS` see all of them
+- **Hardened by default** — signed webhooks, CSRF protection, server-side
+  sessions, rate limits and a strict CSP; see [security.md](security.md)
+- **Self-update** — `jaas-app update` checks GitHub Releases, verifies the
+  binary's SHA-256 against the release checksums and replaces it in-place
 
 ## 📦 Install
 
@@ -43,8 +54,11 @@ Download the latest binary from
 
 ```sh
 # Linux (x86_64)
-curl -Lo jaas-app https://github.com/cbrake/jaas-app/releases/latest/download/jaas-app-$(curl -s https://api.github.com/repos/cbrake/jaas-app/releases/latest | grep tag_name | cut -d'"' -f4)-linux-x86_64
-chmod +x jaas-app
+TAG=$(curl -s https://api.github.com/repos/cbrake/jaas-app/releases/latest | grep tag_name | cut -d'"' -f4)
+curl -LO "https://github.com/cbrake/jaas-app/releases/download/$TAG/jaas-app-$TAG-Linux-x86_64"
+curl -LO "https://github.com/cbrake/jaas-app/releases/download/$TAG/jaas-app_${TAG#v}_checksums.txt"
+sha256sum --ignore-missing -c "jaas-app_${TAG#v}_checksums.txt"
+mv "jaas-app-$TAG-Linux-x86_64" jaas-app && chmod +x jaas-app
 ```
 
 To update an existing install:
@@ -69,20 +83,115 @@ cp .env.example .env
 
 ## 🔧 Configuration
 
-| Variable            | Required | Default     | Description                                       |
-| ------------------- | -------- | ----------- | ------------------------------------------------- |
-| `JAAS_APP_ID`       | Yes      |             | Your JaaS application ID                          |
-| `JAAS_API_KEY_ID`   | Yes      |             | Your JaaS API key ID (used as JWT `kid` header)   |
-| `JAAS_API_KEY_PATH` | Yes\*    |             | Path to RSA private key PEM file (PKCS8 or PKCS1) |
-| `JAAS_API_KEY`      | Yes\*    |             | RSA private key PEM contents, supplied inline     |
-| `ADMIN_PASSWORD`    | Yes      |             | Password to access the admin dashboard            |
-| `SESSION_SECRET`    | Yes      |             | Secret used to sign session cookies (HMAC-SHA256) |
-| `LISTEN_ADDR`       | No       | `:8370`     | TCP address the HTTP server binds to              |
-| `DB_PATH`           | No       | `./jaas.db` | Path to the SQLite database file                  |
+Every secret can be given inline (`NAME`) or, preferably, as a file
+(`NAME_FILE`), which keeps it out of the process environment and
+`docker inspect`.
 
-\* Supply the JaaS private key either as a file (`JAAS_API_KEY_PATH`) or inline
-(`JAAS_API_KEY`). Inline is convenient on platforms whose only secret mechanism
-is environment variables. If both are set, `JAAS_API_KEY` wins.
+### Required
+
+| Variable                                           | Description                                                                                                                        |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`                                    | `https://` origin browsers use, e.g. `https://mtg.example.com`; every POST must come from it                                       |
+| `JAAS_APP_ID`                                      | Your JaaS application ID                                                                                                           |
+| `JAAS_API_KEY_ID`                                  | Your JaaS API key ID (used as JWT `kid` header)                                                                                    |
+| `JAAS_PRIVATE_KEY_FILE` / `JAAS_PRIVATE_KEY`       | RSA private key PEM (PKCS8 or PKCS1). `JAAS_API_KEY_PATH` / `JAAS_API_KEY` are still accepted                                      |
+| `JAAS_WEBHOOK_SECRET_FILE` / `JAAS_WEBHOOK_SECRET` | Webhook signing secret from the JaaS console (Webhooks, "Reveal secret")                                                           |
+| `ADMIN_INITIAL_PASSWORD_FILE`                      | First start only: at least 14 characters, stored hashed, must be changed at first login. `ADMIN_PASSWORD` is accepted the same way |
+
+### General
+
+| Variable                                | Default                           | Description                                                      |
+| --------------------------------------- | --------------------------------- | ---------------------------------------------------------------- |
+| `LISTEN_ADDR`                           | `:8370`                           | TCP address the HTTP server binds to                             |
+| `DB_PATH`                               | `./jaas.db`                       | Path to the SQLite database file                                 |
+| `DISPLAY_TIMEZONE`                      | `UTC`                             | IANA zone for times in the dashboard, minutes and e-mails        |
+| `MAX_MEETING_HOURS`                     | `4`                               | How long a started room, its sessions and JWTs last (1–48)       |
+| `TRUSTED_PROXIES`                       | `127.0.0.0/8,::1,172.16.0.0/12`   | Peers whose `X-Real-IP` is trusted for rate limiting             |
+| `WEBHOOK_TOLERANCE_SECONDS`             | `86400`                           | Accepted signature age; JaaS retries keep the original timestamp |
+| `DOWNLOAD_ALLOWED_HOSTS`                | `objectstorage.*.oraclecloud.com` | Hosts the server may download JaaS transcripts from (https only) |
+| `TRANSCRIPT_RETENTION_MONTHS` / `_DAYS` | keep forever                      | Delete transcripts older than this                               |
+| `MINUTES_RETENTION_MONTHS` / `_DAYS`    | keep forever                      | Delete minutes older than this                                   |
+| `DEV_INSECURE_COOKIES`                  |                                   | `true` only for local development over plain HTTP                |
+
+### AI minutes (optional)
+
+Without `OPENAI_API_KEY` the app serves meetings, recordings and JaaS
+transcripts exactly as before.
+
+| Variable                                     | Default                     | Description                                                            |
+| -------------------------------------------- | --------------------------- | ---------------------------------------------------------------------- |
+| `OPENAI_API_KEY_FILE` / `OPENAI_API_KEY`     |                             | Enables minutes and browser-microphone transcription                   |
+| `OPENAI_MODEL`                               |                             | Required with a key; `jaas-app models` lists the ones your key can use |
+| `MINUTES_LANGUAGE`                           | `English`                   | Language the minutes are written in, e.g. `Spanish`                    |
+| `TRANSCRIBE_MODEL`                           | `whisper-1`                 | Speech-to-text model; only `whisper-1` returns per-segment timestamps  |
+| `TRANSCRIBE_LANGUAGE`                        | auto-detect                 | ISO-639-1 hint, e.g. `en`                                              |
+| `TRANSCRIBE_PROMPT`                          |                             | Vocabulary hint: names, products, jargon                               |
+| `OPENAI_BASE_URL`                            | `https://api.openai.com/v1` | Compatible endpoint                                                    |
+| `WORKER_MAX_ATTEMPTS`                        | `5`                         | Retries with backoff before a draft is marked failed                   |
+| `MAX_TRANSCRIPT_MB` / `MAX_TRANSCRIPT_CHARS` | `20` / `500000`             | Download and prompt size limits                                        |
+
+### E-mail (optional)
+
+Needed to notify hosts that minutes are ready and to send host-approved copies
+to participants.
+
+| Variable                                     | Default                     | Description                                                                   |
+| -------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
+| `SMTP_HOST`, `SMTP_PORT`                     | port `587`                  | Submission server                                                             |
+| `SMTP_SECURITY`                              | `starttls`                  | `starttls` or `tls`                                                           |
+| `SMTP_USER`, `SMTP_PASSWORD[_FILE]`          |                             | Credentials                                                                   |
+| `MAIL_FROM`, `MAIL_FROM_NAME`                | name `BEC Systems Meetings` | Sender address and display name                                               |
+| `MAIL_REPLY_TO`                              | approving host              | Shared mailbox for replies to participant copies                              |
+| `MAIL_REVIEWER`                              | `the meeting host`          | Who the copy says reviewed the minutes                                        |
+| `MAIL_SIGNATURE_NAME`, `MAIL_SIGNATURE_ROLE` |                             | Optional signature lines                                                      |
+| `PRIVACY_URL`                                |                             | `https://` link in the join notice of transcribed rooms and in e-mail footers |
+
+### Cloudflare Access (optional)
+
+With Access in front of `/admin`, the app verifies the Access JWT itself and
+switches to per-user rooms: each person sees and manages only the rooms they
+created, and `ADMIN_EMAILS` see all of them. Without it, the dashboard uses the
+single admin password.
+
+| Variable                    | Description                                         |
+| --------------------------- | --------------------------------------------------- |
+| `CF_ACCESS_TEAM_DOMAIN`     | e.g. `example.cloudflareaccess.com`                 |
+| `CF_ACCESS_AUD`             | Application audience tag                            |
+| `CF_ACCESS_ALLOWED_DOMAINS` | Comma-separated e-mail domains allowed in           |
+| `CF_ACCESS_ALLOWED_EMAILS`  | Comma-separated addresses allowed in                |
+| `ADMIN_EMAILS`              | Addresses that see every room                       |
+| `REQUIRE_CF_ACCESS`         | `true` refuses to start unless Access is configured |
+
+## 🤖 AI minutes
+
+1. Set `OPENAI_API_KEY` and `OPENAI_MODEL` (and SMTP to e-mail them).
+2. Turn on **Transcribe** for a room. Participants then give their name, e-mail
+   and consent before joining; rooms without transcription still need only a
+   name.
+3. The transcript comes either from JaaS (`TRANSCRIPTION_UPLOADED` webhook) or,
+   with a key, from each participant's own microphone: the browser uploads
+   15-second chunks while the participant is unmuted, the worker transcribes
+   them with timestamps and merges the speakers by wall clock. Audio is deleted
+   once transcribed.
+4. A durable worker in the same process produces one draft per session through
+   the Responses API with a strict JSON schema, re-validates it, and adds
+   measured participation (talk time, words per minute, turns, interruptions).
+   The transcript is treated as data, never as instructions.
+5. The room owner gets an e-mail with a link (no meeting content). Nothing goes
+   to participants until the host approves the recipients on the minutes page;
+   each then receives an HTML summary plus the transcript (`.txt`) and minutes
+   (`.md`).
+
+## ⬆️ Upgrading from 0.1.x
+
+- Add `PUBLIC_ORIGIN` and the JaaS webhook signing secret
+  (`JAAS_WEBHOOK_SECRET`); unsigned webhooks are now rejected.
+- `ADMIN_PASSWORD` keeps working, but only to create the first stored credential
+  (at least 14 characters); you are asked to change it at first login. Later
+  changes go through the dashboard or `jaas-app reset-admin`.
+- `SESSION_SECRET` is no longer used: sessions are server-side.
+- `JAAS_API_KEY_PATH` / `JAAS_API_KEY` keep working.
+- The database migrates itself on start; take a backup first.
 
 ## 🏠 Hosting
 
@@ -132,9 +241,14 @@ Put a reverse proxy in front for TLS. With Caddy the whole configuration is:
 
 ```caddyfile
 mtg.example.com {
-	reverse_proxy 127.0.0.1:8370
+	reverse_proxy 127.0.0.1:8370 {
+		header_up X-Real-IP {remote_host}
+	}
 }
 ```
+
+The app trusts `X-Real-IP` only from `TRUSTED_PROXIES`, so rate limits apply to
+the real client address.
 
 ### Docker
 
@@ -157,12 +271,13 @@ install. On container hosts, deploy a new image instead.
 
 ### Backups
 
-The database holds rooms, host password hashes, recording links, and
-transcripts. Back it up with SQLite's online backup, which is safe to run while
-the service is up:
+The database holds rooms, host password hashes, recording links, transcripts and
+minutes. `jaas-app backup` writes a consistent snapshot (`VACUUM INTO`) while
+the service is up, and `jaas-app verify-db` checks one:
 
 ```sh
-sqlite3 /opt/jaas-app/jaas.db ".backup '/var/backups/jaas-$(date +%F).db'"
+jaas-app backup "/var/backups/jaas-$(date +%F).db"
+jaas-app verify-db "/var/backups/jaas-$(date +%F).db"
 ```
 
 Keep the JaaS private key and the values in the environment file backed up
@@ -170,20 +285,22 @@ separately.
 
 ## 🔐 How It Works
 
-- **Admin** logs in at `/admin` with the admin password to create/manage rooms
-  and start meetings.
+- **Admin** logs in at `/admin` (admin password, or Cloudflare Access identity)
+  to create/manage rooms and start meetings.
 - **Host** receives a meeting link (`/m/{slug}`) and starts the meeting by
   entering the room's host password.
 - **Guests** join with just the link — no account or password needed once a host
   has started the meeting.
 - **Phone dial-in** is built into JaaS. Each room gets a phone number and PIN
   displayed on the join page — no extra setup required.
-- **Recordings** are delivered via JaaS webhooks and shown in the admin
+- **Recordings** are delivered via signed JaaS webhooks and shown in the admin
   dashboard with time-limited download links.
 - **Transcriptions** can be enabled per-room; parsed transcripts are viewable in
   the admin panel.
-- **Self-update** — run `jaas-app update` to check GitHub Releases and replace
-  the binary in-place.
+- **Minutes** (optional) are drafted by the worker and sent only after the host
+  approves the recipients.
+- **Self-update** — run `jaas-app update` to check GitHub Releases, verify the
+  SHA-256 checksum and replace the binary in-place.
 
 ## 📖 Developer Documentation
 

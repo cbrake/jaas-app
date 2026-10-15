@@ -1,136 +1,40 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>{{.Slug}} — Join</title>
-		<style>
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-			}
-			body {
-				font-family: system-ui, sans-serif;
-				background: #f5f5f5;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				min-height: 100vh;
-			}
-			.card {
-				background: #fff;
-				border-radius: 8px;
-				padding: 2rem;
-				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-				width: 100%;
-				max-width: 400px;
-				text-align: center;
-			}
-			h1 {
-				font-size: 1.25rem;
-				margin-bottom: 0.5rem;
-			}
-			.subtitle {
-				color: #888;
-				font-size: 0.875rem;
-				margin-bottom: 1.5rem;
-			}
-			input {
-				width: 100%;
-				padding: 0.5rem 0.75rem;
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				font-size: 1rem;
-				margin-bottom: 0.75rem;
-			}
-			.btn-join {
-				width: 100%;
-				padding: 0.625rem;
-				background: #2563eb;
-				color: #fff;
-				border: none;
-				border-radius: 4px;
-				font-size: 1rem;
-				cursor: pointer;
-			}
-			.btn-join:hover {
-				background: #1d4ed8;
-			}
-			.error {
-				color: #dc2626;
-				font-size: 0.875rem;
-				margin-bottom: 0.75rem;
-			}
-			.host-toggle {
-				color: #888;
-				font-size: 0.8rem;
-				cursor: pointer;
-				margin-top: 1rem;
-				display: inline-block;
-			}
-			.host-toggle:hover {
-				color: #2563eb;
-			}
-			.host-section {
-				display: none;
-				border-top: 1px solid #eee;
-				padding-top: 1rem;
-				margin-top: 0.75rem;
-			}
-			.host-section.open {
-				display: block;
-			}
-			.host-section p {
-				color: #666;
-				font-size: 0.8rem;
-				margin-bottom: 0.5rem;
-			}
-			.version {
-				color: #aaa;
-				font-size: 0.7rem;
-				margin-top: 1.5rem;
-			}
-		</style>
-	</head>
-	<body>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>{{.Slug}} · BEC Systems Meetings</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
+	<script src="{{asset "join.js"}}" defer></script>
+</head>
+<body>
+	<div class="center">
 		<div class="card">
-			<img
-				src="/static/logo.svg"
-				alt="BEC Systems"
-				style="width: 120px; margin-bottom: 1rem"
-			/>
+			<img class="logo" src="{{asset "logo.svg"}}" alt="BEC Systems" />
 			<h1>{{.Slug}}</h1>
-			<p class="subtitle">Enter your name to join the meeting</p>
-			{{if .Error}}
-			<p class="error">{{.Error}}</p>
-			{{end}}
+			<p class="sub">Enter your name to join the meeting.</p>
+			{{with .Error}}<p class="error">{{.}}</p>{{end}}
 			<form method="POST" action="/m/{{.Slug}}/join">
-				<input
-					type="text"
-					name="display_name"
-					placeholder="Your name"
-					autofocus
-					required
-					autocomplete="name"
-				/>
-				<button type="submit" class="btn-join">Join Meeting</button>
-				<span
-					class="host-toggle"
-					onclick="document.getElementById('host-section').classList.toggle('open')"
-					>Are you the host?</span
-				>
-				<div id="host-section" class="host-section{{if .Error}} open{{end}}">
-					<p>Enter password to start or cohost the meeting.</p>
-					<input
-						type="text"
-						name="host_password"
-						placeholder="Host password"
-						autocomplete="off"
-					/>
+				<input type="hidden" name="form_token" value="{{.FormToken}}" />
+				<label for="display_name">Your name</label>
+				<input type="text" id="display_name" name="display_name" value="{{.Name}}" required maxlength="80" autofocus autocomplete="name" />
+				{{if .Transcribed}}
+				<label for="email">Your e-mail</label>
+				<input type="email" id="email" name="email" value="{{.Email}}" required maxlength="254" autocomplete="email" />
+				<p class="foot" style="text-align:left">This meeting is transcribed: while you take part, your browser records your own microphone (never while you are muted) and the audio is sent to OpenAI for transcription, then deleted. Afterwards the host can e-mail you the transcript and the minutes at this address.{{with privacyURL}}
+					<a href="{{.}}" target="_blank" rel="noopener">Privacy notice</a>.{{end}}</p>
+				<label style="display:flex;gap:.5rem;align-items:flex-start"><input type="checkbox" name="consent" required />
+					<span>I agree that my microphone may be recorded and transcribed during the meeting and to receive the copy by e-mail.</span></label>
+				{{end}}
+				<button type="submit" class="block">Join meeting</button>
+				<p class="foot"><button type="button" id="host-toggle" class="linklike">Are you the host?</button></p>
+				<div id="host-section" class="{{if not .HostOpen}}hidden{{end}}">
+					<label for="host_password">Host password</label>
+					<input type="password" id="host_password" name="host_password" autocomplete="current-password" />
 				</div>
 			</form>
-			<p class="version">jaas-app {{version}}</p>
 		</div>
-	</body>
+	</div>
+</body>
 </html>

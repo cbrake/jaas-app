@@ -1,17 +1,20 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
-	"io"
-	"log"
+	"log/slog"
 	"net/http"
-	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,12 +25,65 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-var templateFuncs = template.FuncMap{
-	"version": func() string { return version },
+// assetVersions maps each embedded static file to a short content hash.
+// Pages reference /static/<file>?v=<hash>, so a deploy changes the URL of
+// every changed asset and the CDN never serves a stale script or stylesheet.
+var assetVersions = func() map[string]string {
+	out := map[string]string{}
+	entries, _ := staticFS.ReadDir("static")
+	for _, e := range entries {
+		b, err := staticFS.ReadFile("static/" + e.Name())
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(b)
+		out[e.Name()] = hex.EncodeToString(sum[:])[:12]
+	}
+	return out
+}()
+
+func assetURL(name string) string {
+	return "/static/" + name + "?v=" + assetVersions[name]
+}
+
+// staticHandler: the current versioned URL is cacheable for a year; any
+// other request (unversioned or an old version) is cached briefly only.
+func staticHandler() http.Handler {
+	fs := http.FileServer(http.FS(staticFS))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/static/")
+		if v := r.URL.Query().Get("v"); v != "" && v == assetVersions[name] {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=60")
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		fs.ServeHTTP(w, r)
+	})
+}
+
+func (app *App) templateFuncs() template.FuncMap {
+	return template.FuncMap{
+		"asset":      assetURL,
+		"version":    func() string { return version },
+		"privacyURL": func() string { return app.Config.PrivacyURL },
+		"local": func(t time.Time) string {
+			if t.IsZero() {
+				return "—"
+			}
+			return t.In(app.Config.DisplayTimezone).Format("2006-01-02 15:04")
+		},
+		"deref": func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		},
+	}
 }
 
 func (app *App) loadTemplates() error {
-	t, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(app.templateFuncs()).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return err
 	}
@@ -35,302 +91,681 @@ func (app *App) loadTemplates() error {
 	return nil
 }
 
-func (app *App) render(w http.ResponseWriter, name string, data any) {
-	if app.templates == nil {
-		if err := app.loadTemplates(); err != nil {
-			log.Printf("load templates: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
+func (app *App) render(w http.ResponseWriter, status int, name string, data map[string]any) {
+	setSecurityHeaders(w, name == "meeting.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	if err := app.templates.ExecuteTemplate(w, name, data); err != nil {
-		log.Printf("render %s: %v", name, err)
+		slog.Error("render failed", "template", name)
 	}
+}
+
+func (app *App) serverError(w http.ResponseWriter, where string, err error) {
+	slog.Error("internal error", "where", where, "error", err.Error())
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
 func (app *App) RegisterRoutes(mux *http.ServeMux) {
-	admin := RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDashboard))
+	admin := func(h http.HandlerFunc) http.Handler { return app.requireAdmin(h, false) }
+	adminPw := func(h http.HandlerFunc) http.Handler { return app.requireAdmin(h, true) }
+	cf := app.requireCFAccess
 
-	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
+	mux.Handle("GET /static/", staticHandler())
+	mux.HandleFunc("GET /healthz", app.handleHealth)
 	mux.HandleFunc("GET /{$}", app.handleHome)
-	mux.HandleFunc("GET /admin/login", app.handleLoginPage)
-	mux.HandleFunc("POST /admin/login", app.handleLogin)
-	mux.HandleFunc("POST /admin/logout", app.handleLogout)
-	mux.Handle("GET /admin", admin)
-	mux.Handle("POST /admin/rooms", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleCreateRoom)))
-	mux.Handle("POST /admin/rooms/{slug}/delete", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleDeleteRoom)))
-	mux.Handle("POST /admin/rooms/{slug}/start", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStart)))
-	mux.Handle("POST /admin/rooms/{slug}/stop", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleAdminStop)))
-	mux.Handle("POST /admin/rooms/{slug}/transcription", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleToggleTranscription)))
+
+	mux.Handle("GET /admin/login", cf(http.HandlerFunc(app.handleLoginPage)))
+	mux.Handle("POST /admin/login", cf(http.HandlerFunc(app.handleLogin)))
+	mux.Handle("POST /admin/logout", cf(http.HandlerFunc(app.handleLogout)))
+	mux.Handle("GET /admin/password", cf(adminPw(app.handlePasswordPage)))
+	mux.Handle("POST /admin/password", cf(adminPw(app.handlePasswordChange)))
+	mux.Handle("GET /admin", cf(admin(app.handleDashboard)))
+	mux.Handle("POST /admin/rooms", cf(admin(app.handleCreateRoom)))
+	mux.Handle("POST /admin/rooms/{slug}/delete", cf(admin(app.handleDeleteRoom)))
+	mux.Handle("POST /admin/rooms/{slug}/start", cf(admin(app.handleAdminStart)))
+	mux.Handle("POST /admin/rooms/{slug}/stop", cf(admin(app.handleAdminStop)))
+	mux.Handle("POST /admin/rooms/{slug}/transcription", cf(admin(app.handleToggleTranscription)))
+	mux.Handle("GET /admin/transcriptions/{id}", cf(admin(app.handleViewTranscription)))
+	mux.Handle("GET /admin/minutes/{id}", cf(admin(app.handleViewMinutes)))
+	mux.Handle("GET /admin/minutes/{id}/download", cf(admin(app.handleDownloadMinutes)))
+	mux.Handle("POST /admin/minutes/{id}/retry", cf(admin(app.handleRetryMinutes)))
+	mux.Handle("POST /admin/minutes/{id}/send", cf(admin(app.handleSendMinutes)))
+
 	mux.HandleFunc("GET /m/{slug}", app.handleMeeting)
 	mux.HandleFunc("POST /m/{slug}/join", app.handleJoinMeeting)
 	mux.HandleFunc("POST /m/{slug}/end", app.handleEndMeeting)
-	mux.Handle("GET /admin/transcriptions/{id}", RequireAdmin(app.Config.SessionSecret, http.HandlerFunc(app.handleViewTranscription)))
+	mux.HandleFunc("POST /m/{slug}/audio", app.handleAudioChunk)
+
 	mux.HandleFunc("POST /webhook/recording", app.handleRecordingWebhook)
 }
 
-func (app *App) handleHome(w http.ResponseWriter, r *http.Request) {
-	app.render(w, "home.html", nil)
+// --- middleware ---
+
+func (app *App) requireCFAccess(next http.Handler) http.Handler {
+	if app.CFAccess == nil {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		email, err := app.CFAccess.Verify(r.Context(), r.Header.Get("Cf-Access-Jwt-Assertion"))
+		if err != nil {
+			slog.Warn("admin: cloudflare access rejected", "ip", app.clientIP(r))
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), accessEmailKey, email)))
+	})
 }
 
+type ctxKey int
+
+const (
+	adminSessionKey ctxKey = iota + 1
+	accessEmailKey
+)
+
+// identityMode: Cloudflare Access authenticates each person and the app
+// scopes rooms to their e-mail. Without Access the panel falls back to the
+// single admin password (break-glass / local development).
+func (app *App) identityMode() bool { return app.CFAccess != nil }
+
+func accessEmail(r *http.Request) string {
+	e, _ := r.Context().Value(accessEmailKey).(string)
+	return e
+}
+
+func (app *App) isSuperadmin(email string) bool {
+	return slices.Contains(app.Config.AdminEmails, email)
+}
+
+// requireAdmin validates the server-side session, enforces the CSRF token on
+// every POST and, until the temporary password is replaced, confines the
+// session to the password page. In identity mode the session is created from
+// the verified Access identity and discarded if that identity changes.
+func (app *App) requireAdmin(next http.HandlerFunc, passwordPage bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if app.identityMode() {
+			app.requireIdentity(w, r, next, passwordPage)
+			return
+		}
+		s, err := app.DB.GetAdminSession(app.cookieValue(r, "jaas_admin"))
+		if err != nil {
+			if !errors.Is(err, ErrNotFound) {
+				app.serverError(w, "admin session", err)
+				return
+			}
+			app.clearCookie(w, "jaas_admin")
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			return
+		}
+		if r.Method == http.MethodPost && !tokensEqual(r.PostFormValue("csrf_token"), s.CSRFToken) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if s.MustChange && !passwordPage {
+			http.Redirect(w, r, "/admin/password", http.StatusSeeOther)
+			return
+		}
+		s.Superadmin = true // password mode has a single administrator
+		next.ServeHTTP(w, r.WithContext(contextWithAdmin(r, s)))
+	})
+}
+
+func (app *App) requireIdentity(w http.ResponseWriter, r *http.Request, next http.HandlerFunc, passwordPage bool) {
+	email := accessEmail(r)
+	if email == "" { // requireCFAccess must run first
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if passwordPage {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	token := app.cookieValue(r, "jaas_admin")
+	s, err := app.DB.GetAdminSession(token)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		app.serverError(w, "admin session", err)
+		return
+	}
+	if err == nil && s.Email != email {
+		app.DB.DeleteAdminSession(token) // Access identity changed: drop the old session
+		s = nil
+	}
+	if s == nil || err != nil {
+		if r.Method == http.MethodPost { // no valid CSRF token can exist yet
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		token, err = app.DB.CreateAdminSession(email)
+		if err != nil {
+			app.serverError(w, "admin session", err)
+			return
+		}
+		if s, err = app.DB.GetAdminSession(token); err != nil {
+			app.serverError(w, "admin session", err)
+			return
+		}
+		app.setCookie(w, "jaas_admin", token, adminAbsoluteTimeout)
+		slog.Info("admin: session", "user", email)
+	}
+	if r.Method == http.MethodPost && !tokensEqual(r.PostFormValue("csrf_token"), s.CSRFToken) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	s.MustChange = false
+	s.Superadmin = app.isSuperadmin(email)
+	next.ServeHTTP(w, r.WithContext(contextWithAdmin(r, s)))
+}
+
+// canManage reports whether the current admin may see or act on a room.
+func canManage(s *AdminSession, room *Room) bool {
+	return s.Superadmin || (s.Email != "" && room.OwnerEmail == s.Email)
+}
+
+// adminRoom loads the room in the path and enforces ownership. Rooms of
+// other users answer 404, not 403, so their names are not confirmed.
+func (app *App) adminRoom(w http.ResponseWriter, r *http.Request) (*Room, bool) {
+	room, ok := app.roomFromPath(w, r)
+	if !ok {
+		return nil, false
+	}
+	if !canManage(adminFrom(r), room) {
+		app.render(w, http.StatusNotFound, "notfound.html", nil)
+		return nil, false
+	}
+	return room, true
+}
+
+// adminRoomBySlug enforces ownership for objects (minutes, transcripts) that
+// reference a room by slug.
+func (app *App) adminRoomBySlug(w http.ResponseWriter, r *http.Request, slug string) bool {
+	room, err := app.DB.GetRoom(slug)
+	if err != nil || !canManage(adminFrom(r), room) {
+		http.NotFound(w, r)
+		return false
+	}
+	return true
+}
+
+// formToken implements a double-submit token for forms used before any
+// session exists (login, join). It complements the Origin check.
+func (app *App) formToken(w http.ResponseWriter, r *http.Request) string {
+	if v := app.cookieValue(r, "jaas_form"); len(v) >= 32 {
+		return v
+	}
+	v := randomToken()
+	app.setCookie(w, "jaas_form", v, 12*time.Hour)
+	return v
+}
+
+func (app *App) checkFormToken(r *http.Request) bool {
+	return tokensEqual(r.PostFormValue("form_token"), app.cookieValue(r, "jaas_form"))
+}
+
+// --- public pages ---
+
+func (app *App) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if err := app.DB.Ping(r.Context()); err != nil {
+		http.Error(w, "db unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte("ok"))
+}
+
+func (app *App) handleHome(w http.ResponseWriter, r *http.Request) {
+	app.render(w, http.StatusOK, "home.html", nil)
+}
+
+// --- admin auth ---
+
 func (app *App) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	app.render(w, "login.html", nil)
+	if app.identityMode() {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	app.render(w, http.StatusOK, "login.html", map[string]any{"FormToken": app.formToken(w, r)})
 }
 
 func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
-	password := r.FormValue("password")
-	if password != app.Config.AdminPassword {
-		app.render(w, "login.html", map[string]string{"Error": "Invalid password"})
+	if app.identityMode() {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
-	http.SetCookie(w, SignSession(app.Config.SessionSecret))
+	ip := app.clientIP(r)
+	if !app.checkFormToken(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if app.loginLimiter.Blocked(ip) {
+		slog.Warn("admin: login rate limited", "ip", ip)
+		app.render(w, http.StatusTooManyRequests, "login.html", map[string]any{
+			"FormToken": app.formToken(w, r),
+			"Error":     "Too many attempts. Wait 15 minutes.",
+		})
+		return
+	}
+	password := r.PostFormValue("password")
+	hash := dummyHash
+	cred, err := app.DB.GetAdminCredential()
+	if err == nil {
+		hash = []byte(cred.Hash)
+	} else if !errors.Is(err, ErrNotFound) {
+		app.serverError(w, "login", err)
+		return
+	}
+	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil || cred == nil {
+		app.loginLimiter.Fail(ip)
+		slog.Warn("admin: login failed", "ip", ip)
+		app.render(w, http.StatusUnauthorized, "login.html", map[string]any{
+			"FormToken": app.formToken(w, r),
+			"Error":     "Incorrect password.",
+		})
+		return
+	}
+	app.loginLimiter.Reset(ip)
+	token, err := app.DB.CreateAdminSession("")
+	if err != nil {
+		app.serverError(w, "login", err)
+		return
+	}
+	slog.Info("admin: login", "ip", ip)
+	app.setCookie(w, "jaas_admin", token, adminAbsoluteTimeout)
+	if cred.MustChange {
+		http.Redirect(w, r, "/admin/password", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (app *App) handleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, ClearSession())
+	token := app.cookieValue(r, "jaas_admin")
+	s, err := app.DB.GetAdminSession(token)
+	if err == nil && tokensEqual(r.PostFormValue("csrf_token"), s.CSRFToken) {
+		app.DB.DeleteAdminSession(token)
+	}
+	app.clearCookie(w, "jaas_admin")
+	if app.identityMode() {
+		// Also end the Cloudflare Access session for this hostname.
+		http.Redirect(w, r, "/cdn-cgi/access/logout", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 
+func (app *App) handlePasswordPage(w http.ResponseWriter, r *http.Request) {
+	s := adminFrom(r)
+	app.render(w, http.StatusOK, "password.html", map[string]any{"CSRF": s.CSRFToken, "MustChange": s.MustChange})
+}
+
+func (app *App) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
+	s := adminFrom(r)
+	ip := app.clientIP(r)
+	fail := func(status int, msg string) {
+		app.render(w, status, "password.html", map[string]any{"CSRF": s.CSRFToken, "MustChange": s.MustChange, "Error": msg})
+	}
+	if app.loginLimiter.Blocked(ip) {
+		fail(http.StatusTooManyRequests, "Too many attempts. Wait 15 minutes.")
+		return
+	}
+	cred, err := app.DB.GetAdminCredential()
+	if err != nil {
+		app.serverError(w, "password", err)
+		return
+	}
+	current, next := r.PostFormValue("current_password"), r.PostFormValue("new_password")
+	if bcrypt.CompareHashAndPassword([]byte(cred.Hash), []byte(current)) != nil {
+		app.loginLimiter.Fail(ip)
+		fail(http.StatusUnauthorized, "The current password is not correct.")
+		return
+	}
+	if next != r.PostFormValue("confirm_password") {
+		fail(http.StatusBadRequest, "The confirmation does not match.")
+		return
+	}
+	if err := validateNewAdminPassword(current, next); err != nil {
+		fail(http.StatusBadRequest, err.Error())
+		return
+	}
+	// SetAdminPassword revokes every session; issue a fresh one.
+	if err := app.DB.SetAdminPassword(next, false); err != nil {
+		app.serverError(w, "password", err)
+		return
+	}
+	token, err := app.DB.CreateAdminSession("")
+	if err != nil {
+		app.serverError(w, "password", err)
+		return
+	}
+	slog.Info("admin: password changed", "ip", ip)
+	app.setCookie(w, "jaas_admin", token, adminAbsoluteTimeout)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// --- dashboard ---
+
 type roomView struct {
 	Slug           string
+	Owner          string
 	Active         bool
 	Transcription  bool
 	DialIn         *DialInInfo
 	Recordings     []Recording
 	Transcriptions []Transcription
+	Minutes        []Minutes
 }
 
-func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	// Auto-expire rooms older than 4 hours
-	app.DB.DeactivateExpiredRooms(4 * time.Hour)
-
-	rooms, err := app.DB.ListRooms()
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+func (app *App) dashboardData(r *http.Request, extra map[string]any) (map[string]any, error) {
+	app.DB.DeactivateExpiredRooms(app.maxMeeting())
+	s := adminFrom(r)
+	var rooms []Room
+	var err error
+	if s.Superadmin {
+		rooms, err = app.DB.ListRooms()
+	} else {
+		rooms, err = app.DB.ListRoomsOwnedBy(s.Email)
 	}
-
-	// Fetch DIDs once for all rooms
+	if err != nil {
+		return nil, err
+	}
 	numbers, err := app.DialIn.FetchDIDs()
 	if err != nil {
-		log.Printf("dial-in DIDs fetch: %v", err)
+		slog.Warn("dial-in DIDs unavailable")
 	}
-
 	var views []roomView
 	for _, room := range rooms {
-		rv := roomView{Slug: room.Slug, Active: room.Active, Transcription: room.Transcription}
-		pin, err := app.DialIn.FetchPIN(app.Config.JaaSAppID, room.Slug)
-		if err != nil {
-			log.Printf("dial-in PIN for %s: %v", room.Slug, err)
-		} else if numbers != nil {
-			rv.DialIn = &DialInInfo{PIN: pin, Numbers: numbers}
+		rv := roomView{Slug: room.Slug, Owner: room.OwnerEmail, Active: room.Active, Transcription: room.Transcription}
+		if numbers != nil {
+			if pin, err := app.DialIn.FetchPIN(app.Config.JaaSAppID, room.Slug); err == nil {
+				rv.DialIn = &DialInInfo{PIN: pin, Numbers: numbers}
+			}
 		}
-		recs, err := app.DB.ListRecordings(room.Slug)
-		if err != nil {
-			log.Printf("recordings for %s: %v", room.Slug, err)
-		} else {
-			rv.Recordings = recs
+		if rv.Recordings, err = app.DB.ListRecordings(room.Slug); err != nil {
+			return nil, err
 		}
-		trans, err := app.DB.ListTranscriptions(room.Slug)
-		if err != nil {
-			log.Printf("transcriptions for %s: %v", room.Slug, err)
-		} else {
-			rv.Transcriptions = trans
+		if rv.Transcriptions, err = app.DB.ListTranscriptions(room.Slug); err != nil {
+			return nil, err
+		}
+		if rv.Minutes, err = app.DB.ListMinutes(room.Slug); err != nil {
+			return nil, err
 		}
 		views = append(views, rv)
 	}
+	data := map[string]any{
+		"Rooms":        views,
+		"CSRF":         s.CSRFToken,
+		"PublicOrigin": app.Config.PublicOrigin,
+		"AIMinutes":    app.LLM != nil,
+		"Email":        s.Email,
+		"Superadmin":   s.Superadmin,
+		"IdentityMode": app.identityMode(),
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	return data, nil
+}
 
-	app.render(w, "dashboard.html", map[string]any{
-		"Rooms": views,
-	})
+func (app *App) renderDashboard(w http.ResponseWriter, r *http.Request, status int, extra map[string]any) {
+	data, err := app.dashboardData(r, extra)
+	if err != nil {
+		app.serverError(w, "dashboard", err)
+		return
+	}
+	app.render(w, status, "dashboard.html", data)
+}
+
+func (app *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	app.renderDashboard(w, r, http.StatusOK, nil)
 }
 
 func (app *App) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	hostPassword := r.FormValue("host_password")
-
-	if slug == "" || hostPassword == "" {
-		app.render(w, "dashboard.html", map[string]any{
-			"Error": "Slug and host password are required",
+	slug := strings.TrimSpace(r.PostFormValue("slug"))
+	hostPassword := r.PostFormValue("host_password")
+	if !validSlug(slug) {
+		app.renderDashboard(w, r, http.StatusBadRequest, map[string]any{
+			"Error": "The room name must be 3 to 80 characters: lowercase letters, digits and hyphens, not starting with a hyphen.",
 		})
 		return
 	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(hostPassword), bcrypt.DefaultCost)
+	if len(hostPassword) < minHostPasswordLen {
+		app.renderDashboard(w, r, http.StatusBadRequest, map[string]any{
+			"Error": "The host password must be at least 10 characters long.",
+		})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(hostPassword), bcryptCost)
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverError(w, "create room", err)
 		return
 	}
-
-	if err := app.DB.CreateRoom(slug, string(hash)); err != nil {
-		rooms, _ := app.DB.ListRooms()
-		var views []roomView
-		for _, room := range rooms {
-			views = append(views, roomView{Slug: room.Slug})
-		}
-		app.render(w, "dashboard.html", map[string]any{
-			"Error": "Room slug already exists",
-			"Rooms": views,
-		})
+	owner := adminFrom(r).Email
+	if err := app.DB.CreateRoom(slug, string(hash), owner); err != nil {
+		app.renderDashboard(w, r, http.StatusConflict, map[string]any{"Error": "A room with that name already exists."})
 		return
 	}
-
+	slog.Info("admin: room created", "room", slug, "user", owner)
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (app *App) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
+// roomFromPath validates the slug before touching the database.
+func (app *App) roomFromPath(w http.ResponseWriter, r *http.Request) (*Room, bool) {
 	slug := r.PathValue("slug")
-	app.DB.DeleteRoom(slug)
+	if !validSlug(slug) {
+		app.render(w, http.StatusNotFound, "notfound.html", nil)
+		return nil, false
+	}
+	room, err := app.DB.GetRoom(slug)
+	if errors.Is(err, ErrNotFound) {
+		app.render(w, http.StatusNotFound, "notfound.html", map[string]any{"Slug": slug})
+		return nil, false
+	}
+	if err != nil {
+		app.serverError(w, "room", err)
+		return nil, false
+	}
+	return room, true
+}
+
+func (app *App) handleDeleteRoom(w http.ResponseWriter, r *http.Request) {
+	room, ok := app.adminRoom(w, r)
+	if !ok {
+		return
+	}
+	app.deleteRoomAudio(room.Slug)
+	if err := app.DB.DeleteRoom(room.Slug); err != nil {
+		app.serverError(w, "delete room", err)
+		return
+	}
+	slog.Info("admin: room deleted with its recordings, transcripts and minutes", "room", room.Slug, "user", adminFrom(r).Email)
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
 func (app *App) handleAdminStart(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
-	room, err := app.DB.GetRoom(slug)
-	if errors.Is(err, ErrNotFound) {
-		http.NotFound(w, r)
+	room, ok := app.adminRoom(w, r)
+	if !ok {
 		return
 	}
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	name := cleanDisplayName(r.PostFormValue("display_name"))
+	if name == "" {
+		name = "Host"
+	}
+	if err := app.startParticipant(w, room.Slug, name, adminFrom(r).Email, true); err != nil {
+		app.serverError(w, "admin start", err)
 		return
 	}
-
-	displayName := strings.TrimSpace(r.FormValue("display_name"))
-	if displayName == "" {
-		displayName = "Admin"
-	}
-
-	app.DB.SetRoomActive(slug, true)
-
-	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true, room.Transcription)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
-}
-
-func (app *App) handleToggleTranscription(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
-	enabled := r.FormValue("enabled") == "on"
-	app.DB.SetTranscription(slug, enabled)
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, "/m/"+room.Slug, http.StatusSeeOther)
 }
 
 func (app *App) handleAdminStop(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
-	app.DB.SetRoomActive(slug, false)
+	room, ok := app.adminRoom(w, r)
+	if !ok {
+		return
+	}
+	app.DB.SetRoomActive(room.Slug, false)
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
-	app.DB.DeactivateExpiredRooms(4 * time.Hour)
-
-	slug := r.PathValue("slug")
-	room, err := app.DB.GetRoom(slug)
-	if errors.Is(err, ErrNotFound) {
-		w.WriteHeader(http.StatusNotFound)
-		app.render(w, "notfound.html", map[string]string{"Slug": slug})
+func (app *App) handleToggleTranscription(w http.ResponseWriter, r *http.Request) {
+	room, ok := app.adminRoom(w, r)
+	if !ok {
 		return
 	}
+	app.DB.SetTranscription(room.Slug, r.PostFormValue("enabled") == "on")
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// --- meetings ---
+
+// cleanDisplayName strips control characters and bounds the length; the
+// name ends up inside the JaaS JWT and the meeting page.
+func cleanDisplayName(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(s))
+	if r := []rune(s); len(r) > 80 {
+		s = string(r[:80])
+	}
+	return strings.TrimSpace(s)
+}
+
+func (app *App) startParticipant(w http.ResponseWriter, slug, name, email string, moderator bool) error {
+	if moderator {
+		if err := app.DB.SetRoomActive(slug, true); err != nil {
+			return err
+		}
+	}
+	token, err := app.DB.CreateParticipantSession(slug, name, email, moderator, app.maxMeeting())
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return err
+	}
+	if err := app.DB.RecordJoin(slug, email, name, moderator); err != nil {
+		return err
+	}
+	app.setCookie(w, "jaas_part", token, app.maxMeeting())
+	return nil
+}
+
+func (app *App) handleMeeting(w http.ResponseWriter, r *http.Request) {
+	app.DB.DeactivateExpiredRooms(app.maxMeeting())
+	room, ok := app.roomFromPath(w, r)
+	if !ok {
 		return
 	}
-
-	// Check for JWT in query param (set by /join redirect)
-	jwtToken := r.URL.Query().Get("jwt")
-	isModerator := r.URL.Query().Get("mod") == "1"
-	displayName := r.URL.Query().Get("name")
-
-	if jwtToken == "" || (!room.Active && !isModerator) {
-		// No JWT or meeting ended — show the join form
-		app.render(w, "join.html", map[string]any{
-			"Slug": slug,
+	p, err := app.DB.GetParticipantSession(app.cookieValue(r, "jaas_part"))
+	if err == nil && p.RoomSlug == room.Slug && (room.Active || p.Moderator) {
+		if p.Moderator && !room.Active {
+			app.DB.SetRoomActive(room.Slug, true)
+		}
+		jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID,
+			room.Slug, p.DisplayName, p.Email, p.Moderator, room.Transcription, app.maxMeeting())
+		if err != nil {
+			app.serverError(w, "jwt", err)
+			return
+		}
+		app.render(w, http.StatusOK, "meeting.html", map[string]any{
+			"Slug":        room.Slug,
+			"AppID":       app.Config.JaaSAppID,
+			"JWT":         jwt,
+			"IsModerator": p.Moderator,
+			"DisplayName": p.DisplayName,
+			"CSRF":        p.CSRFToken,
+			"Capture":     room.Transcription && app.Transcriber != nil,
 		})
 		return
 	}
-
-	app.render(w, "meeting.html", map[string]any{
-		"Slug":        slug,
-		"AppID":       app.Config.JaaSAppID,
-		"JWT":         jwtToken,
-		"IsModerator": isModerator,
-		"DisplayName": displayName,
-	})
+	app.render(w, http.StatusOK, "join.html", map[string]any{"Slug": room.Slug, "FormToken": app.formToken(w, r), "Transcribed": room.Transcription})
 }
 
 func (app *App) handleJoinMeeting(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
-	room, err := app.DB.GetRoom(slug)
-	if errors.Is(err, ErrNotFound) {
-		w.WriteHeader(http.StatusNotFound)
-		app.render(w, "notfound.html", map[string]string{"Slug": slug})
+	room, ok := app.roomFromPath(w, r)
+	if !ok {
 		return
 	}
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if !app.checkFormToken(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	formToken := app.formToken(w, r)
+	name := cleanDisplayName(r.PostFormValue("display_name"))
+	email := normalizeEmail(r.PostFormValue("email"))
+	form := func(extra map[string]any) map[string]any {
+		data := map[string]any{"Slug": room.Slug, "FormToken": formToken, "Name": name, "Email": r.PostFormValue("email"), "Transcribed": room.Transcription}
+		for k, v := range extra {
+			data[k] = v
+		}
+		return data
+	}
+	switch {
+	case name == "":
+		app.render(w, http.StatusBadRequest, "join.html", form(map[string]any{"Error": "Enter your name."}))
+		return
+	case room.Transcription && email == "":
+		app.render(w, http.StatusBadRequest, "join.html", form(map[string]any{"Error": "Enter a valid e-mail address: the transcript and minutes are sent there."}))
+		return
+	case room.Transcription && r.PostFormValue("consent") != "on":
+		app.render(w, http.StatusBadRequest, "join.html", form(map[string]any{"Error": "To join you must accept the transcription and e-mail notice."}))
 		return
 	}
 
-	displayName := strings.TrimSpace(r.FormValue("display_name"))
-	if displayName == "" {
-		app.render(w, "join.html", map[string]any{
-			"Slug":  slug,
-			"Error": "Name is required",
-		})
-		return
-	}
-
-	hostPassword := r.FormValue("host_password")
-
-	// If host password provided, validate and join as moderator
-	if hostPassword != "" {
-		if err := bcrypt.CompareHashAndPassword([]byte(room.HostHash), []byte(hostPassword)); err != nil {
-			app.render(w, "join.html", map[string]any{
-				"Slug":  slug,
-				"Error": "Invalid host password",
-			})
+	if hostPassword := r.PostFormValue("host_password"); hostPassword != "" {
+		ip := app.clientIP(r)
+		ipKey, roomKey := ip+"|"+room.Slug, room.Slug
+		if app.hostLimiter.Blocked(ipKey) || app.hostRoomLimiter.Blocked(roomKey) {
+			slog.Warn("join: host password rate limited", "room", room.Slug, "ip", ip)
+			app.render(w, http.StatusTooManyRequests, "join.html", form(map[string]any{"Error": "Too many attempts. Wait 15 minutes.", "HostOpen": true}))
 			return
 		}
-
-		app.DB.SetRoomActive(slug, true)
-
-		jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, true, room.Transcription)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		if bcrypt.CompareHashAndPassword([]byte(room.HostHash), []byte(hostPassword)) != nil {
+			app.hostLimiter.Fail(ipKey)
+			app.hostRoomLimiter.Fail(roomKey)
+			slog.Warn("join: wrong host password", "room", room.Slug, "ip", ip)
+			app.render(w, http.StatusUnauthorized, "join.html", form(map[string]any{"Error": "Incorrect host password.", "HostOpen": true}))
 			return
 		}
-		http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&mod=1&name="+url.QueryEscape(displayName), http.StatusSeeOther)
+		app.hostLimiter.Reset(ipKey)
+		if err := app.startParticipant(w, room.Slug, name, email, true); err != nil {
+			app.serverError(w, "join host", err)
+			return
+		}
+		slog.Info("join: host", "room", room.Slug)
+		http.Redirect(w, r, "/m/"+room.Slug, http.StatusSeeOther)
 		return
 	}
 
-	// No host password — guest flow
 	if !room.Active {
-		// Meeting not started yet, show waiting page
-		app.render(w, "waiting.html", map[string]any{
-			"Slug":        slug,
-			"DisplayName": displayName,
+		app.render(w, http.StatusOK, "waiting.html", map[string]any{
+			"Slug": room.Slug, "DisplayName": name, "Email": email, "FormToken": formToken,
 		})
 		return
 	}
-
-	jwt, err := GenerateJWT(app.Config.JaaSKey, app.Config.JaaSAppID, app.Config.JaaSKeyID, slug, displayName, false, room.Transcription)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err := app.startParticipant(w, room.Slug, name, email, false); err != nil {
+		app.serverError(w, "join guest", err)
 		return
 	}
-	http.Redirect(w, r, "/m/"+slug+"?jwt="+jwt+"&name="+url.QueryEscape(displayName), http.StatusSeeOther)
+	http.Redirect(w, r, "/m/"+room.Slug, http.StatusSeeOther)
 }
 
+// handleEndMeeting is called by the moderator page (sendBeacon). Only a
+// moderator session for this room, with its CSRF token, can end it.
 func (app *App) handleEndMeeting(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
+	if !validSlug(slug) {
+		http.NotFound(w, r)
+		return
+	}
+	p, err := app.DB.GetParticipantSession(app.cookieValue(r, "jaas_part"))
+	if err != nil || p.RoomSlug != slug || !p.Moderator || !tokensEqual(r.PostFormValue("csrf_token"), p.CSRFToken) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	app.DB.SetRoomActive(slug, false)
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
+
+// --- transcripts and minutes ---
 
 type transcriptMessage struct {
 	Name      string
@@ -338,134 +773,197 @@ type transcriptMessage struct {
 	Timestamp time.Time
 }
 
-func (app *App) handleViewTranscription(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	var id int64
-	fmt.Sscanf(idStr, "%d", &id)
+func pathID(r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	return id, err == nil && id > 0
+}
 
+func (app *App) handleViewTranscription(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	t, err := app.DB.GetTranscription(id)
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverError(w, "transcription", err)
 		return
 	}
-
-	// Parse the transcription JSON
+	if !app.adminRoomBySlug(w, r, t.RoomSlug) {
+		return
+	}
 	var raw struct {
-		ConferenceName string `json:"conferenceName"`
-		Messages       []struct {
+		Messages []struct {
 			Name      string `json:"name"`
 			Content   string `json:"content"`
 			Timestamp int64  `json:"timestamp"`
 		} `json:"messages"`
 	}
 	json.Unmarshal([]byte(t.Data), &raw)
-
 	var messages []transcriptMessage
 	for _, m := range raw.Messages {
-		messages = append(messages, transcriptMessage{
-			Name:      m.Name,
-			Content:   m.Content,
-			Timestamp: time.UnixMilli(m.Timestamp),
-		})
+		messages = append(messages, transcriptMessage{Name: m.Name, Content: m.Content, Timestamp: time.UnixMilli(m.Timestamp)})
 	}
+	app.render(w, http.StatusOK, "transcription.html", map[string]any{"Transcription": t, "Messages": messages})
+}
 
-	app.render(w, "transcription.html", map[string]any{
-		"Transcription": t,
-		"Messages":      messages,
-		"Room":          raw.ConferenceName,
+func (app *App) loadMinutes(w http.ResponseWriter, r *http.Request) (*Minutes, *MinutesResult, bool) {
+	id, ok := pathID(r)
+	if !ok {
+		http.NotFound(w, r)
+		return nil, nil, false
+	}
+	m, err := app.DB.GetMinutes(id)
+	if errors.Is(err, ErrNotFound) {
+		http.NotFound(w, r)
+		return nil, nil, false
+	}
+	if err != nil {
+		app.serverError(w, "minutes", err)
+		return nil, nil, false
+	}
+	if !app.adminRoomBySlug(w, r, m.RoomSlug) {
+		return nil, nil, false
+	}
+	var res *MinutesResult
+	if m.Status == "ready" {
+		res = &MinutesResult{}
+		if err := json.Unmarshal([]byte(m.ResultJSON), res); err != nil {
+			app.serverError(w, "minutes decode", err)
+			return nil, nil, false
+		}
+	}
+	return m, res, true
+}
+
+func (app *App) handleViewMinutes(w http.ResponseWriter, r *http.Request) {
+	m, res, ok := app.loadMinutes(w, r)
+	if !ok {
+		return
+	}
+	var recipients []Recipient
+	if res != nil {
+		var err error
+		if recipients, err = app.DB.ProposedRecipients(m); err != nil {
+			app.serverError(w, "recipients", err)
+			return
+		}
+	}
+	app.render(w, http.StatusOK, "minutes.html", map[string]any{
+		"M": m, "R": res, "CSRF": adminFrom(r).CSRFToken, "TZ": app.Config.DisplayTimezone.String(),
+		"Recipients": recipients, "MailEnabled": app.Mailer != nil, "Sent": r.URL.Query().Get("enviado"),
 	})
 }
 
-func (app *App) handleRecordingWebhook(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+func (app *App) handleDownloadMinutes(w http.ResponseWriter, r *http.Request) {
+	m, res, ok := app.loadMinutes(w, r)
+	if !ok {
+		return
+	}
+	if res == nil {
+		http.Error(w, "The minutes are not ready yet.", http.StatusConflict)
+		return
+	}
+	setSecurityHeaders(w, false)
+	base := "minutes-" + m.RoomSlug + "-" + m.MeetingAt.In(app.Config.DisplayTimezone).Format("2006-01-02") + "-" + strconv.FormatInt(m.ID, 10)
+	if r.URL.Query().Get("format") == "json" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+base+`.json"`)
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.Encode(map[string]any{
+			"room_slug": m.RoomSlug, "session_id": m.SessionID, "status": "draft",
+			"meeting_at": m.MeetingAt.Format(time.RFC3339), "model": m.Model, "minutes": res,
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+base+`.md"`)
+	w.Write([]byte(minutesMarkdown(m, res, app.Config.DisplayTimezone)))
+}
+
+// handleSendMinutes queues the host-approved deliveries. Only addresses from
+// the proposed list (people who took part in this session) can be chosen.
+func (app *App) handleSendMinutes(w http.ResponseWriter, r *http.Request) {
+	if app.Mailer == nil {
+		http.Error(w, "E-mail delivery is not configured.", http.StatusServiceUnavailable)
+		return
+	}
+	m, res, ok := app.loadMinutes(w, r)
+	if !ok {
+		return
+	}
+	if res == nil {
+		http.Error(w, "The minutes are not ready yet.", http.StatusConflict)
+		return
+	}
+	proposed, err := app.DB.ProposedRecipients(m)
 	if err != nil {
-		log.Printf("webhook: read body: %v", err)
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		app.serverError(w, "recipients", err)
 		return
 	}
-	log.Printf("webhook: received: %s", string(body))
-
-	var payload struct {
-		EventType string `json:"eventType"`
-		Data      struct {
-			PreAuthenticatedLink string `json:"preAuthenticatedLink"`
-			DurationSec          int    `json:"durationSec"`
-			LinkExpiration       int64  `json:"linkExpiration"`
-		} `json:"data"`
-		FQN string `json:"fqn"`
+	allowed := map[string]Recipient{}
+	for _, p := range proposed {
+		allowed[p.Email] = p
 	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		log.Printf("webhook: invalid payload: %v", err)
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+	r.ParseForm()
+	var chosen []Recipient
+	for _, raw := range r.PostForm["recipient"] {
+		p, ok := allowed[normalizeEmail(raw)]
+		if !ok {
+			http.Error(w, "Recipient is not on the participant list.", http.StatusBadRequest)
+			return
+		}
+		chosen = append(chosen, p)
+	}
+	if len(chosen) == 0 {
+		http.Redirect(w, r, "/admin/minutes/"+strconv.FormatInt(m.ID, 10), http.StatusSeeOther)
 		return
 	}
-
-	// Extract room slug from FQN: "vpaas-xxx/room-slug"
-	roomSlug := ""
-	parts := strings.Split(payload.FQN, "/")
-	if len(parts) >= 2 {
-		roomSlug = parts[len(parts)-1]
+	approver := adminFrom(r).Email
+	if approver == "" {
+		approver = "admin"
 	}
-
-	switch payload.EventType {
-	case "RECORDING_UPLOADED":
-		if payload.Data.PreAuthenticatedLink == "" {
-			log.Printf("webhook: no download link in recording payload")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		expiresAt := time.Now().Add(24 * time.Hour)
-		if payload.Data.LinkExpiration > 0 {
-			expiresAt = time.Unix(payload.Data.LinkExpiration/1000, 0)
-		}
-		if err := app.DB.AddRecording(roomSlug, "recording", payload.Data.PreAuthenticatedLink, expiresAt, payload.Data.DurationSec); err != nil {
-			log.Printf("webhook: save recording: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		log.Printf("webhook: recording saved for room %s (expires %s)", roomSlug, expiresAt.Format(time.RFC3339))
-
-	case "TRANSCRIPTION_UPLOADED":
-		if payload.Data.PreAuthenticatedLink == "" {
-			log.Printf("webhook: no download link in transcription payload")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		// Download the transcription JSON
-		resp, err := http.Get(payload.Data.PreAuthenticatedLink)
-		if err != nil {
-			log.Printf("webhook: download transcription: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		transcriptBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("webhook: read transcription: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		// Extract sessionId from the transcription JSON
-		var tData struct {
-			SessionID string `json:"sessionId"`
-		}
-		json.Unmarshal(transcriptBody, &tData)
-
-		if err := app.DB.AddTranscription(roomSlug, tData.SessionID, string(transcriptBody)); err != nil {
-			log.Printf("webhook: save transcription: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		log.Printf("webhook: transcription saved for room %s (session %s)", roomSlug, tData.SessionID)
-
-	default:
-		w.WriteHeader(http.StatusOK)
+	n, err := app.DB.QueueDeliveries(m.ID, chosen, approver)
+	if err != nil {
+		app.serverError(w, "queue deliveries", err)
 		return
 	}
+	slog.Info("admin: minutes delivery approved", "minutes", m.ID, "queued", n, "user", adminFrom(r).Email)
+	app.wakeWorker()
+	http.Redirect(w, r, "/admin/minutes/"+strconv.FormatInt(m.ID, 10)+"?enviado="+strconv.Itoa(n), http.StatusSeeOther)
+}
 
-	w.WriteHeader(http.StatusOK)
+func (app *App) handleRetryMinutes(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	m, err := app.DB.GetMinutes(id)
+	if errors.Is(err, ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		app.serverError(w, "retry", err)
+		return
+	}
+	if !app.adminRoomBySlug(w, r, m.RoomSlug) {
+		return
+	}
+	requeued, err := app.DB.RequeueMinutes(id)
+	if err != nil {
+		app.serverError(w, "retry", err)
+		return
+	}
+	if requeued {
+		slog.Info("admin: minutes requeued", "id", id)
+		app.wakeWorker()
+	}
+	http.Redirect(w, r, "/admin/minutes/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }

@@ -2,8 +2,9 @@
 # app name and primary region, then:
 #
 #   fly volumes create jaas_data --size 1 --region <region>
-#   fly secrets set JAAS_APP_ID=... JAAS_API_KEY_ID=... ADMIN_PASSWORD=... \
-#       SESSION_SECRET=... JAAS_API_KEY="$(cat jaas-api-key.pk)"
+#   fly secrets set PUBLIC_ORIGIN=https://<app>.fly.dev JAAS_APP_ID=... \
+#       JAAS_API_KEY_ID=... JAAS_WEBHOOK_SECRET=... ADMIN_PASSWORD=... \
+#       JAAS_PRIVATE_KEY="$(cat jaas-api-key.pk)"
 #   fly deploy
 #
 # Run a single machine: SQLite on a volume cannot be shared between machines.

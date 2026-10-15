@@ -1,52 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Room}} — Transcription</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 2rem; max-width: 800px; margin: 0 auto; }
-        h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-        .meta { color: #666; font-size: 0.85rem; margin-bottom: 1.5rem; }
-        .meta a { color: #2563eb; text-decoration: none; }
-        .meta a:hover { text-decoration: underline; }
-        .messages { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .message { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #f0f0f0; }
-        .message:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
-        .speaker { font-weight: 600; font-size: 0.9rem; }
-        .time { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
-        .content { margin-top: 0.25rem; line-height: 1.5; color: #333; }
-        @media (max-width: 600px) {
-            body { padding: 1rem; }
-        }
-    </style>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>Transcript · {{.Transcription.RoomSlug}}</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
 </head>
 <body>
-    <h1>{{.Room}}</h1>
-    <p class="meta"><span class="local-time" data-utc="{{.Transcription.CreatedAt.Format "2006-01-02T15:04:05Z"}}"></span> · <a href="/admin">Back to dashboard</a></p>
-
-    <div class="messages">
-        {{if .Messages}}
-        {{range .Messages}}
-        <div class="message">
-            <span class="speaker">{{.Name}}</span><span class="time local-time" data-utc="{{.Timestamp.Format "2006-01-02T15:04:05Z"}}" data-format="time"></span>
-            <div class="content">{{.Content}}</div>
-        </div>
-        {{end}}
-        {{else}}
-        <p style="color: #666;">No messages in this transcription.</p>
-        {{end}}
-    </div>
-    <script>
-        document.querySelectorAll('.local-time').forEach(function(el) {
-            var d = new Date(el.dataset.utc);
-            if (el.dataset.format === 'time') {
-                el.textContent = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-            } else {
-                el.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-            }
-        });
-    </script>
+	<div class="page">
+		<p><a href="/admin">← Back to dashboard</a></p>
+		<div class="card wide">
+			<h1>Transcript · {{.Transcription.RoomSlug}}</h1>
+			<p class="sub">Session {{.Transcription.SessionID}} · received {{local .Transcription.CreatedAt}}</p>
+			{{range .Messages}}
+			<div class="msg"><span class="who">{{.Name}}</span><span class="when">{{local .Timestamp}}</span><div>{{.Content}}</div></div>
+			{{else}}
+			<p class="muted">The transcript has no recognisable messages.</p>
+			{{end}}
+		</div>
+	</div>
 </body>
 </html>

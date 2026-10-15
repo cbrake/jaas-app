@@ -1,20 +1,31 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
+	"time"
 )
 
 const (
-	githubAPIURL = "https://api.github.com/repos/cbrake/jaas-app/releases/latest"
-	githubRelURL = "https://github.com/cbrake/jaas-app/releases/latest/download"
+	githubAPIURL      = "https://api.github.com/repos/cbrake/jaas-app/releases/latest"
+	githubDownloadURL = "https://github.com/cbrake/jaas-app/releases/download"
+
+	maxReleaseBinary = 256 << 20
+	maxChecksumsFile = 1 << 20
 )
+
+var updateClient = &http.Client{Timeout: 5 * time.Minute}
 
 // GitHubRelease represents the GitHub API release response
 type GitHubRelease struct {
@@ -22,7 +33,9 @@ type GitHubRelease struct {
 	Name    string `json:"name"`
 }
 
-// Update checks for and downloads the latest version of jaas-app
+// Update checks for and downloads the latest version of jaas-app. The binary
+// is installed only if its SHA-256 matches the checksums file goreleaser
+// publishes with the same release (security.md L2).
 func Update(currentVersion string) error {
 	fmt.Println("Checking for updates...")
 
@@ -48,7 +61,7 @@ func Update(currentVersion string) error {
 		fmt.Printf("Updating from %s to %s\n", currentVersion, latestVersion)
 	}
 
-	// Download and install the latest version
+	// Download, verify and install the latest version
 	if err := downloadAndInstall(latestVersion); err != nil {
 		return fmt.Errorf("failed to update: %w", err)
 	}
@@ -59,7 +72,7 @@ func Update(currentVersion string) error {
 
 // getLatestVersion fetches the latest release version from GitHub
 func getLatestVersion() (string, error) {
-	resp, err := http.Get(githubAPIURL)
+	resp, err := updateClient.Get(githubAPIURL)
 	if err != nil {
 		return "", err
 	}
@@ -70,31 +83,26 @@ func getLatestVersion() (string, error) {
 	}
 
 	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
 		return "", err
+	}
+	if release.TagName == "" || strings.ContainsAny(release.TagName, "/\\?#") {
+		return "", errors.New("unexpected release tag")
 	}
 
 	return release.TagName, nil
 }
 
-// downloadAndInstall downloads and installs the latest version
+// downloadAndInstall downloads the release binary for this platform, checks
+// it against the release's checksums file and replaces the running binary.
 func downloadAndInstall(version string) error {
-	// Determine the binary name based on OS and architecture
 	binaryName := getBinaryName(version)
-	downloadURL := fmt.Sprintf("%s/%s", githubRelURL, binaryName)
-
-	fmt.Printf("Downloading %s...\n", downloadURL)
-
-	// Download the binary
-	resp, err := http.Get(downloadURL)
+	fmt.Printf("Downloading %s...\n", binaryName)
+	data, err := fetchVerifiedRelease(githubDownloadURL+"/"+version, version, binaryName)
 	if err != nil {
-		return fmt.Errorf("failed to download: %w", err)
+		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
+	fmt.Println("Checksum verified")
 
 	// Get the current executable path
 	execPath, err := os.Executable()
@@ -114,12 +122,14 @@ func downloadAndInstall(version string) error {
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Write the downloaded binary to the temp file
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	// Write the verified binary to the temp file
+	if _, err := tmpFile.Write(data); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write binary: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to write binary: %w", err)
+	}
 
 	// Make the temp file executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -148,30 +158,107 @@ func downloadAndInstall(version string) error {
 	return nil
 }
 
-// getBinaryName returns the binary name for the current platform
-func getBinaryName(version string) string {
-	goos := runtime.GOOS
-	goarch := runtime.GOARCH
-
-	osName := goos
-	if goos == "darwin" {
-		osName = "macos"
+// fetchVerifiedRelease downloads binaryName from the release at base and
+// returns it only if its SHA-256 matches the release's checksums file.
+func fetchVerifiedRelease(base, version, binaryName string) ([]byte, error) {
+	sums, err := fetchLimited(base+"/"+checksumsName(version), maxChecksumsFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download checksums: %w", err)
 	}
+	want, err := checksumFor(sums, binaryName)
+	if err != nil {
+		return nil, err
+	}
+	data, err := fetchLimited(base+"/"+binaryName, maxReleaseBinary)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download: %w", err)
+	}
+	got := sha256.Sum256(data)
+	if hex.EncodeToString(got[:]) != want {
+		return nil, fmt.Errorf("checksum mismatch for %s: refusing to install", binaryName)
+	}
+	return data, nil
+}
 
+func fetchLimited(url string, limit int64) ([]byte, error) {
+	resp, err := updateClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errors.New("file too large")
+	}
+	return data, nil
+}
+
+// checksumsName is goreleaser's default checksum file name for a release.
+func checksumsName(version string) string {
+	return fmt.Sprintf("jaas-app_%s_checksums.txt", strings.TrimPrefix(version, "v"))
+}
+
+// checksumFor returns the lowercase hex SHA-256 listed for name in a
+// sha256sum-style file ("<hex>  <name>" per line).
+func checksumFor(sums []byte, name string) (string, error) {
+	for _, line := range bytes.Split(sums, []byte("\n")) {
+		f := strings.Fields(string(line))
+		if len(f) != 2 || f[1] != name {
+			continue
+		}
+		sum := strings.ToLower(f[0])
+		if _, err := hex.DecodeString(sum); err != nil || len(sum) != 64 {
+			return "", fmt.Errorf("malformed checksum for %s", name)
+		}
+		return sum, nil
+	}
+	return "", fmt.Errorf("no checksum published for %s", name)
+}
+
+// getBinaryName returns the release asset name for the current platform. It
+// follows the archives.name_template in .goreleaser.yaml, e.g.
+// jaas-app-v0.1.0-Linux-x86_64, jaas-app-v0.1.0-Macos-arm64,
+// jaas-app-v0.1.0-Linux-armv6, jaas-app-v0.1.0-Windows-x86_64.exe.
+func getBinaryName(version string) string {
+	return releaseAssetName(version, runtime.GOOS, runtime.GOARCH, buildGOARM())
+}
+
+func releaseAssetName(version, goos, goarch, goarm string) string {
+	osName := strings.ToUpper(goos[:1]) + goos[1:]
+	if goos == "darwin" {
+		osName = "Macos"
+	}
 	archName := goarch
 	if goarch == "amd64" {
 		archName = "x86_64"
-	} else if goarch == "386" {
-		archName = "i386"
 	}
-
-	armVersion := ""
 	if goarch == "arm" {
-		armVersion = "v7"
-		if v := os.Getenv("GOARM"); v != "" {
-			armVersion = "v" + v
+		if goarm == "" {
+			goarm = "6" // goreleaser's default
+		}
+		archName += "v" + goarm
+	}
+	name := fmt.Sprintf("jaas-app-%s-%s-%s", version, osName, archName)
+	if goos == "windows" {
+		name += ".exe"
+	}
+	return name
+}
+
+// buildGOARM reports the GOARM the running binary was built with.
+func buildGOARM() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "GOARM" {
+				return strings.SplitN(s.Value, ",", 2)[0]
+			}
 		}
 	}
-
-	return fmt.Sprintf("jaas-app-%s-%s-%s%s", version, osName, archName, armVersion)
+	return ""
 }

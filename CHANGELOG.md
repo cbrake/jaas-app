@@ -8,6 +8,42 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Optional AI meeting minutes (OpenAI Responses API, strict JSON schema):
+  summary, key points, decisions, action items with evidence, risks, open
+  questions and sentiment per speaker, phase and key moment, with measured
+  participation metrics
+- Optional transcription from each participant's own microphone (OpenAI
+  speech-to-text), for accounts without JaaS transcription
+- Host notice when minutes are ready and host-approved e-mail of the minutes and
+  transcript to participants (SMTP); e-mail and consent are asked at join only
+  in transcribed rooms
+- Optional Cloudflare Access identity with per-user rooms and `ADMIN_EMAILS`
+- Opt-in retention for transcripts and minutes; `backup`, `verify-db`,
+  `reset-admin`, `models`, `send-test-mail`, `regenerate-minutes` and
+  `send-preview` commands; `/healthz`
+- `MINUTES_LANGUAGE`, `TRANSCRIBE_LANGUAGE`, `DISPLAY_TIMEZONE`, `PRIVACY_URL`
+
+### Security
+
+- All findings in `security.md`: signed webhooks, CSRF tokens and origin checks,
+  server-side admin sessions with a hashed password, rate limits, JWTs out of
+  URLs, moderator-only meeting end, server-side slug validation, CSP and
+  security headers, size limits, SSRF-safe downloads, payload-free logs
+- `jaas-app update` verifies the release SHA-256 checksum before installing
+- Container image pinned by digest, distroless and non-root
+
+### Fixed
+
+- `jaas-app update` requested asset names that releases do not publish
+  (`linux`/`macos` instead of `Linux`/`Macos`, no `.exe`)
+
+### Changed
+
+- `ADMIN_PASSWORD` only seeds the first stored credential; `SESSION_SECRET` is
+  no longer used; `JAAS_WEBHOOK_SECRET` and `PUBLIC_ORIGIN` are required
+
 ## [0.1.0] - 2026-07-16
 
 ### Added

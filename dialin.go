@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 const defaultBaseURL = "https://8x8.vc"
@@ -17,6 +18,14 @@ type DialInInfo struct {
 
 type DialInClient struct {
 	BaseURL string
+	HTTP    *http.Client
+}
+
+func (c *DialInClient) client() *http.Client {
+	if c.HTTP != nil {
+		return c.HTTP
+	}
+	return &http.Client{Timeout: 5 * time.Second}
 }
 
 func (c *DialInClient) baseURL() string {
@@ -29,7 +38,7 @@ func (c *DialInClient) baseURL() string {
 func (c *DialInClient) FetchPIN(appID, room string) (string, error) {
 	conference := room + "@conference." + appID + ".8x8.vc"
 	pinURL := c.baseURL() + "/v1/_jaas/vmms-conference-mapper/v1/access?conference=" + url.QueryEscape(conference)
-	resp, err := http.Get(pinURL)
+	resp, err := c.client().Get(pinURL)
 	if err != nil {
 		return "", fmt.Errorf("fetching PIN: %w", err)
 	}
@@ -58,7 +67,7 @@ func (c *DialInClient) FetchPIN(appID, room string) (string, error) {
 
 func (c *DialInClient) FetchDIDs() (map[string][]string, error) {
 	didsURL := c.baseURL() + "/v1/_jaas/vmms-conference-mapper/access/v1/dids"
-	resp, err := http.Get(didsURL)
+	resp, err := c.client().Get(didsURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching DIDs: %w", err)
 	}

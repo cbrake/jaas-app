@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>Minutes · {{.M.RoomSlug}}</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
+</head>
+<body>
+	<div class="page">
+		<p><a href="/admin">← Back to dashboard</a></p>
+		<div class="card wide doc">
+			<h1>Minutes · {{.M.RoomSlug}}</h1>
+			<p class="sub">Meeting {{local .M.MeetingAt}} ({{.TZ}}) · session {{.M.SessionID}}{{with .M.Model}} · model {{.}}{{end}}</p>
+			{{if eq .M.Status "ready"}}
+			<p class="notice">Automatically generated draft. Review it before sharing it or acting on it.</p>
+			<div class="row">
+				<a class="btn secondary" href="/admin/minutes/{{.M.ID}}/download">Download Markdown</a>
+				<a class="btn secondary" href="/admin/minutes/{{.M.ID}}/download?format=json">Download JSON</a>
+			</div>
+			<h2>Summary</h2>
+			<p>{{.R.Summary}}</p>
+			{{if .R.KeyPoints}}<h2>Key points</h2>
+			<ul>{{range .R.KeyPoints}}<li>{{.}}</li>{{end}}</ul>{{end}}
+			{{with .R.Sentiment.Overall}}<h2>Sentiment analysis</h2>
+			<p><span class="badge {{if eq . "positive"}}ok{{else if eq . "negative"}}bad{{else}}warn{{end}}">{{.}}</span> {{$.R.Sentiment.Explanation}}</p>
+			{{if $.R.Sentiment.Timeline}}<table><tr><th>Phase</th><th>Sentiment</th><th>Summary</th></tr>
+				{{range $.R.Sentiment.Timeline}}<tr><td>{{.Phase}}</td><td>{{.Overall}}</td><td>{{.Summary}}</td></tr>{{end}}</table>{{end}}
+			{{if $.R.Sentiment.BySpeaker}}<table><tr><th>Participant</th><th>Sentiment</th><th>Explanation</th><th>Evidence</th></tr>
+				{{range $.R.Sentiment.BySpeaker}}<tr><td>{{.Speaker}}</td><td>{{.Overall}}</td><td>{{.Explanation}}</td><td class="muted">{{.Evidence}}</td></tr>{{end}}</table>{{end}}
+			{{if $.R.Sentiment.Moments}}<ul>{{range $.R.Sentiment.Moments}}<li><strong>{{.Emotion}}</strong>{{with .Time}} · {{deref .}}{{end}} · {{.Speaker}}: <em>“{{.Quote}}”</em></li>{{end}}</ul>{{end}}
+			{{with $.R.Metrics}}<h2>Participation, {{if .Measured}}measured from the audio{{else}}estimated{{end}}</h2>
+			<table><tr><th>Participant</th><th>Talk time</th><th>Words/min</th><th>Turns</th><th>Longest turn</th><th>Interruptions</th></tr>
+				{{range .Speakers}}<tr><td>{{.Speaker}}</td><td>{{printf "%.0f" .SharePct}}%</td><td>{{printf "%.0f" .WordsPerMinute}}</td><td>{{.Turns}}</td><td>{{printf "%.0f" .LongestTurnSec}} s</td><td>{{.Interruptions}}</td></tr>{{end}}</table>{{end}}
+			<p class="muted">{{with $.R.Sentiment.Caveats}}{{.}} {{end}}The analysis combines what was said with signals measured from the audio (talk time, pace, turns and interruptions); it does not measure tone of voice.</p>{{end}}
+			<h2>Decisions</h2>
+			{{if .R.Decisions}}<ul>{{range .R.Decisions}}<li><strong>{{.Decision}}</strong>: {{.Context}}</li>{{end}}</ul>{{else}}<p class="muted">No explicit decisions.</p>{{end}}
+			<h2>Action items</h2>
+			{{if .R.ActionItems}}
+			<table>
+				<tr><th>Task</th><th>Owner</th><th>Due</th><th>Confidence</th><th>Evidence</th></tr>
+				{{range .R.ActionItems}}
+				<tr><td>{{.Task}}</td><td>{{with .Owner}}{{deref .}}{{else}}—{{end}}</td><td>{{with .DueDate}}{{deref .}}{{else}}—{{end}}</td>
+					<td><span class="badge {{if eq .Confidence "high"}}ok{{else if eq .Confidence "medium"}}warn{{else}}bad{{end}}">{{.Confidence}}</span></td>
+					<td class="muted">{{.Evidence}}</td></tr>
+				{{end}}
+			</table>
+			{{else}}<p class="muted">No action items.</p>{{end}}
+			<h2>Risks</h2>
+			{{if .R.Risks}}<ul>{{range .R.Risks}}<li>{{.}}</li>{{end}}</ul>{{else}}<p class="muted">None.</p>{{end}}
+			<h2>Open questions</h2>
+			{{if .R.OpenQuestions}}<ul>{{range .R.OpenQuestions}}<li>{{.}}</li>{{end}}</ul>{{else}}<p class="muted">None.</p>{{end}}
+
+			<h2>Send to participants</h2>
+			{{with .Sent}}<p class="notice">Delivery approved: {{.}} e-mail(s) queued. Reload to see their status.</p>{{end}}
+			{{if not .MailEnabled}}<p class="muted">E-mail delivery is not configured on the server.</p>
+			{{else if not .Recipients}}<p class="muted">No participant e-mail addresses were recorded for this meeting.</p>
+			{{else}}
+			<p class="muted">Each person receives the minutes and the full transcript (attached). Review the minutes before sending.</p>
+			<form method="POST" action="/admin/minutes/{{.M.ID}}/send">
+				<input type="hidden" name="csrf_token" value="{{.CSRF}}" />
+				<table>
+					<tr><th></th><th>Participant</th><th>E-mail</th><th>Source</th><th>Status</th></tr>
+					{{range .Recipients}}
+					<tr>
+						<td>{{if not .Status}}<input type="checkbox" name="recipient" value="{{.Email}}" checked />{{end}}</td>
+						<td>{{.Name}}</td><td>{{.Email}}</td>
+						<td>{{if .InSession}}<span class="badge ok">in the session</span>{{else}}<span class="badge warn">joined via the link</span>{{end}}</td>
+						<td>{{if eq .Status "sent"}}<span class="badge ok">sent</span>{{else if eq .Status "queued"}}<span class="badge warn">queued</span>{{else if eq .Status "failed"}}<span class="badge bad">failed</span> <span class="muted">{{.Error}}</span>{{else}}—{{end}}</td>
+					</tr>
+					{{end}}
+				</table>
+				<p style="margin-top:.75rem"><button type="submit">Send transcript and minutes</button></p>
+			</form>
+			{{end}}
+			{{else if eq .M.Status "failed"}}
+			<p class="error">The minutes could not be generated (attempt {{.M.Attempts}}): {{.M.Error}}</p>
+			<form method="POST" action="/admin/minutes/{{.M.ID}}/retry">
+				<input type="hidden" name="csrf_token" value="{{.CSRF}}" />
+				<button type="submit">Retry</button>
+			</form>
+			{{else}}
+			<p class="notice">Status: {{if eq .M.Status "processing"}}processing{{else}}queued{{end}} (attempt {{.M.Attempts}}).{{with .M.Error}} Last error: {{.}}{{end}}</p>
+			{{end}}
+		</div>
+	</div>
+</body>
+</html>

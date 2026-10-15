@@ -10,6 +10,17 @@ Audit of the jaas-app codebase as of 2026-04-16.
 | Medium   | 6     |
 | Low      | 4     |
 
+**Status:** every finding below is addressed in the current code. Webhooks are
+verified with `X-Jaas-Signature` (HMAC-SHA256); forms carry CSRF tokens and
+POSTs must come from `PUBLIC_ORIGIN`; admin sessions are server-side and
+revocable in `__Host-` cookies; the admin password is a bcrypt hash; login and
+host passwords are rate limited; JWTs never appear in URLs; only a moderator
+session can end a meeting; slugs are validated server-side; templates pass
+values through `data-*` attributes under a CSP without inline scripts; bodies
+are size-limited and logs never contain payloads. For L2, `jaas-app update`
+verifies the SHA-256 published in the release checksums; signing releases
+(cosign or minisign) would also cover a compromised release.
+
 ## High Severity
 
 ### H1: Unauthenticated meeting end endpoint
@@ -215,6 +226,6 @@ them in JS, rather than interpolating directly into `<script>` blocks.
 - **JWT removal from URL** — `history.replaceState` strips the token from the
   address bar immediately on page load.
 - **HttpOnly and SameSite=Lax** on session cookies.
-- **4-hour meeting auto-expiry** prevents rooms from staying active
-  indefinitely.
+- **Meeting auto-expiry** (`MAX_MEETING_HOURS`, 4 hours by default) prevents
+  rooms from staying active indefinitely.
 - **Embedded static files** — no directory traversal risk from the filesystem.

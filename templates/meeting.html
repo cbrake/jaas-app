@@ -1,58 +1,16 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>{{.Slug}} — Meeting</title>
-		<style>
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-			}
-			body {
-				font-family: system-ui, sans-serif;
-				background: #1a1a2e;
-				color: #fff;
-			}
-			#meet {
-				width: 100%;
-				height: 100vh;
-			}
-		</style>
-		<script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
-		<script>
-			// Remove JWT from URL bar to prevent accidental sharing
-			if (window.location.search) {
-				history.replaceState(null, "", window.location.pathname)
-			}
-		</script>
-	</head>
-	<body>
-		<div id="meet"></div>
-
-		<script>
-			var api = new JitsiMeetExternalAPI('8x8.vc', {
-			    roomName: '{{.AppID}}/{{.Slug}}',
-			    jwt: '{{.JWT}}',
-			    parentNode: document.getElementById('meet'),
-			    userInfo: {
-			        displayName: '{{.DisplayName}}'
-			    }
-			});
-			{{if .IsModerator}}
-			api.addEventListener('readyToClose', function() {
-			    navigator.sendBeacon('/m/{{.Slug}}/end');
-			    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
-			});
-			window.addEventListener('beforeunload', function() {
-			    navigator.sendBeacon('/m/{{.Slug}}/end');
-			});
-			{{else}}
-			api.addEventListener('readyToClose', function() {
-			    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
-			});
-			{{end}}
-		</script>
-	</body>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>{{.Slug}} · Meeting</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
+	<script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
+	<script src="{{asset "meeting.js"}}" defer></script>
+</head>
+<body class="meeting">
+	<div id="meet" data-app-id="{{.AppID}}" data-room="{{.Slug}}" data-jwt="{{.JWT}}" data-name="{{.DisplayName}}"
+		data-moderator="{{.IsModerator}}" data-csrf="{{.CSRF}}" data-capture="{{.Capture}}"></div>
+</body>
 </html>
