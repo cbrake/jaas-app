@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Transgenia Meet | Preparación y visualizaciones</title>
+<link rel="stylesheet" href="/visualizations/assets/app.css">
+</head>
+<body>
+<a class="skip" href="#main-content">Saltar al contenido</a>
+<header>
+ <div class="brand"><div class="wordmark">TRANSGENIA</div><span class="internal">Propuesta interna · Sin conexión a PROD</span></div>
+ <div class="eyebrow" style="margin-top:26px">DE LA CONVERSACIÓN AL SEGUIMIENTO</div>
+ <h1>Reuniones que dejan evidencia útil.</h1>
+ <p>Encuentra sesiones, decide qué procesar y da seguimiento a acuerdos y grupos de interés desde un mismo flujo.</p>
+ <p class="destination">Destino previsto: <code>meet.transgenia.org/visualizations</code> · Aún no publicado</p>
+ <div class="tabs" role="tablist" aria-label="Vistas de la propuesta">
+  <button type="button" id="tab-prepare" role="tab" aria-selected="true" aria-controls="view-prepare" tabindex="0">Preparar reunión</button>
+  <button type="button" id="tab-meet" role="tab" aria-selected="false" aria-controls="view-meet" tabindex="-1">Sesiones y minutas</button>
+  <button type="button" id="tab-stakeholders" role="tab" aria-selected="false" aria-controls="view-stakeholders" tabindex="-1">Tableros · Stakeholders</button>
+ </div>
+</header>
+<main id="main-content">
+ <div class="notice"><strong>Ejemplo simulado, no datos de producción.</strong> Clientes, personas, fechas, acuerdos y cifras son ficticios. Los botones actúan solamente en esta maqueta. Al recargar, se restablece el ejemplo.</div>
+
+ <section id="view-prepare" class="preflight" role="tabpanel" aria-labelledby="tab-prepare">
+  <div class="section-head"><div><h2>Comprueba la captura antes de empezar</h2><p class="muted">Elige idioma y micrófono, revisa la señal y decide después qué analizar.</p></div><span class="pill">Todo en esta pantalla es simulado</span></div>
+  <div class="preflight-grid">
+   <div>
+    <fieldset><legend>Reunión y participantes</legend><div class="form-grid">
+     <div class="field"><label for="meetingLanguage">Idioma de la reunión</label><select id="meetingLanguage"><option value="es-MX" selected>Español de México (predeterminado)</option><option value="en">Inglés</option><option value="mixed">Mixta: español e inglés</option></select><p class="form-help">Mantiene el idioma hablado en la transcripción. La minuta se redacta en español de México.</p></div>
+     <div class="field"><label for="meetingProject">Proyecto del ejemplo</label><select id="meetingProject"><option value="alfa">Proyecto Alfa</option><option value="beta">Proyecto Beta</option></select></div>
+    </div>
+    <label class="check" for="sharedMic"><input type="checkbox" id="sharedMic"><span><strong>Varias personas frente a este micrófono</strong><small>Actívalo para una reunión presencial o una sala compartida.</small></span></label>
+    <p id="speakerNotice" class="status-note" aria-live="polite">Un micrófono por participante. El nombre corresponde a la persona que se registra y deberá revisarse.</p>
+    </fieldset>
+    <fieldset><legend>Entrada y calidad del audio</legend><div class="form-grid">
+     <div class="field"><label for="audioDevice">Micrófono del ejemplo</label><select id="audioDevice"><option value="usb">Micrófono USB de sala (simulado)</option><option value="headset">Auriculares (simulados)</option><option value="builtin">Micrófono integrado (simulado)</option></select></div>
+     <div class="field"><label for="audioProfile">Perfil de captura</label><select id="audioProfile"><option value="voice">Voz de alta calidad</option><option value="controlled">Fidelidad controlada</option></select></div>
+    </div>
+    <p class="form-help">En la implementación se comprobará el dispositivo de Meet y el de Jitsi. Elegir uno en la videollamada no garantiza que ambos graben el mismo.</p>
+    <div class="preset"><span>Calidad solicitada</span><strong id="requestedQuality">48 kHz · mono · Opus 96 kbps</strong></div>
+    <div class="preset"><span>Calidad efectiva</span><strong id="effectiveQuality">Pendiente de prueba simulada</strong></div>
+    <div id="processingControls" hidden>
+     <label class="check"><input type="checkbox" id="echoControl"><span>Cancelación de eco</span></label>
+     <label class="check"><input type="checkbox" id="noiseControl"><span>Reducción de ruido</span></label>
+     <label class="check"><input type="checkbox" id="gainControl"><span>Ganancia automática</span></label>
+     <p class="form-help">Perfil opcional: permite comprobar el efecto del procesamiento. Una sala con altavoces puede necesitar cancelación de eco.</p>
+    </div>
+    <p id="profileNotice" class="form-help">Perfil de voz: cancelación de eco, reducción de ruido y ganancia automática activadas. La calidad real depende del equipo y del navegador.</p>
+    <label class="check"><input type="checkbox" id="consentMock"><span><strong>Confirmar aviso de grabación en el ejemplo</strong><small>No activa ningún micrófono. En producción los participantes deben conocer la captura y su conservación.</small></span></label>
+    </fieldset>
+   </div>
+   <div>
+    <article class="panel">
+     <h3>Prueba de señal local</h3><p class="caption">Esta demostración usa resultados prefijados. No solicita permiso de micrófono, no graba voz y no llama a ninguna API.</p>
+     <div class="field"><label for="testScenario">Escenario de prueba</label><select id="testScenario"><option value="clear">Voz clara y continua</option><option value="silence">Silencio</option><option value="noisy">Ruido y fragmentos incompletos</option></select></div>
+     <div id="signal" class="signal" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+     <button id="runLocalTest" class="button" type="button">Simular prueba de señal</button>
+     <div id="localTestStatus" class="test-status" role="status" aria-live="polite">Prueba pendiente. Consumo IA del ejemplo: 0 llamadas.</div>
+     <button id="saveCapture" class="button secondary" type="button" disabled>Guardar captura de ejemplo</button>
+     <p class="form-help">Se conservaría el archivo original en almacenamiento privado del servidor. Retención de <strong>30 días propuesta</strong>, pendiente de confirmar. No se borra al transcribir.</p>
+    </article>
+    <article class="panel" style="margin-top:20px"><h3>Piloto de 7 días</h3><p>Un solo modelo para transcribir: <strong>gpt-transcribe</strong>. Los 7 días empiezan con la puesta en marcha verificada.</p><p class="caption">Sin Whisper en paralelo ni cambio automático de ASR si falla. La minuta usa GPT-5.4-mini para otra tarea. Las métricas de hablantes solo se muestran cuando la atribución está verificada.</p></article>
+   </div>
+  </div>
+  <article id="captureDecision" class="decision-box" hidden>
+   <div class="section-head"><div><h3 id="captureTitle">Captura del ejemplo</h3><p id="captureSummary" class="caption"></p></div><span id="captureState" class="pill">Pendiente</span></div>
+   <div id="captureSteps" class="state-steps" aria-label="Etapas de procesamiento simulado"><span data-step="saved">Audio guardado</span><span data-step="checked">Filtro local</span><span data-step="transcribing">Transcripción</span><span data-step="minutes">Minuta</span><span data-step="ready">Revisión</span></div>
+   <p id="prefilterResult" role="status" aria-live="polite"></p>
+   <div class="mini-ledger"><div>Llamadas ASR simuladas<b id="asrCalls">0</b>Solo gpt-transcribe</div><div>Llamadas de minuta simuladas<b id="minutesCalls">0</b>GPT-5.4-mini</div><div>Audio original<b id="originalState">Conservado</b>Privado · 30 días propuestos</div></div>
+   <p id="captureOutcome" class="status-note">No se ha solicitado análisis.</p>
+   <div class="row-actions"><button id="processCapture" class="button" type="button" disabled>Procesar captura</button><button id="cancelCapture" class="button danger" type="button">Cancelar análisis</button><button id="resetCapture" class="button secondary" type="button">Preparar otro ejemplo</button></div>
+   <p class="caption">Cancelar antes de procesar evita llamadas IA. Si una solicitud ya comenzó puede haber consumo. El original se conserva según la política; cancelar análisis no significa borrar audio.</p>
+  </article>
+ </section>
+ <form id="filters" aria-label="Filtrar sesiones y tablero" hidden>
+  <div class="filters">
+   <div class="field"><label for="search">Buscar sesión, sala o tema</label><input id="search" type="search" placeholder="Ej. inventarios o alfa" autocomplete="off"></div>
+   <div class="field"><label for="from">Desde (CDMX)</label><input id="from" type="date" value="2026-10-14"></div>
+   <div class="field"><label for="to">Hasta (CDMX, inclusivo)</label><input id="to" type="date" value="2026-10-25"></div>
+   <div class="field"><label for="project">Cliente / proyecto</label><select id="project"><option value="">Todos los proyectos</option><option value="alfa">Proyecto Alfa</option><option value="beta">Proyecto Beta</option></select></div>
+   <div class="field"><label for="organizer">Organizador</label><select id="organizer"><option value="">Todos</option><option value="equipo-a">Organizador A</option><option value="equipo-b">Organizador B</option></select></div>
+   <div class="field"><label for="status">Estado</label><select id="status"><option value="">Todos</option><option value="pending">Pendiente de procesar</option><option value="processing">Procesando</option><option value="ready">Lista para revisar</option><option value="sent">Enviada</option><option value="cancelled">Cancelada</option></select></div>
+  </div>
+  <div class="filter-actions"><div id="resultCount" role="status" aria-live="polite"></div><button class="button secondary" type="reset">Limpiar filtros</button></div>
+ </form>
+ <section id="view-meet" role="tabpanel" aria-labelledby="tab-meet" hidden>
+  <div class="section-head"><div><h2>Sesiones y minutas</h2><p class="muted">Una sala puede tener varias sesiones. Cada sesión conserva su propio estado y decisión de procesamiento.</p></div><span class="pill">Hora local: America/Mexico_City</span></div>
+  <div class="table-wrap"><table><caption class="sr-only">Sesiones simuladas filtradas</caption><thead><tr><th scope="col">Sesión / sala</th><th scope="col">Fecha local</th><th scope="col">Proyecto / organizador</th><th scope="col">Estado</th><th scope="col">Consumo IA</th><th scope="col">Acciones simuladas</th></tr></thead><tbody id="sessionsBody"></tbody></table></div>
+  <p class="subtle-note"><strong>Cancelar análisis</strong> impide nuevos trabajos y conserva el audio original según la política de retención. <strong>Descartar borrador</strong> impide su envío. Ninguna acción borra la sala ni recupera consumo ya realizado.</p>
+  <h3 style="margin-top:26px">Flujo propuesto con decisión antes del gasto</h3>
+  <div class="flow"><span><b>Capturar</b>Audio original privado; 30 días propuestos de conservación.</span><span class="point"><b>Revisar captura</b>Filtro local de señal, silencio y voz; procesar o cancelar sin invocar IA.</span><span><b>Procesar</b>gpt-transcribe como único ASR; GPT-5.4-mini para la minuta.</span><span><b>Revisar evidencia</b>Corregir hablantes, acuerdos y fechas.</span><span><b>Aprobar y enviar</b>Registrar aprobación, versión y destinatarios.</span></div>
+  <div class="quality-rule"><strong>La grabación y la transcripción son objetos distintos.</strong> Si el audio ya se eliminó, la interfaz debe indicarlo. Esta propuesta no presume que las sesiones históricas conservan grabaciones reproducibles.</div>
+ </section>
+ <section id="view-stakeholders" role="tabpanel" aria-labelledby="tab-stakeholders" hidden>
+  <div class="section-head"><div><h2>Stakeholders y reuniones</h2><p class="muted">Tablero privado previsto en Meet. La integración posterior con Odoo requiere verificar su instancia, módulos y permisos.</p></div><span class="pill">Corte ficticio: 25 oct 2026</span></div>
+  <div id="metrics" class="grid" aria-label="Indicadores simulados según los filtros"></div>
+  <div class="panels">
+   <article class="panel"><h3>Poder e interés</h3><p class="caption">Clasificación manual del responsable del proyecto. No se deduce de la voz, el tiempo de habla ni el sentimiento.</p><div id="powerGrid" class="quadrant"></div><p class="axes">Columnas: interés bajo → alto. Filas: poder alto → bajo. Fuente: ficha de stakeholder revisada por PM.</p></article>
+   <article class="panel"><h3>Postura expresada sobre el proyecto</h3><p class="caption">Ejemplo simulado de distribución y evolución entre sesiones revisadas. Describe declaraciones concretas, no emociones ni personalidad.</p><div id="stanceBars"></div><div id="stanceTimeline"></div><div id="stanceEvidence" class="evidence"></div></article>
+   <article class="panel"><h3>Compromisos que requieren atención</h3><p class="caption">Vencidos al corte ficticio, con responsable y fuente de aceptación. Los pendientes extraídos por IA requieren revisión antes de convertirse en tareas.</p><div id="actions"></div></article>
+   <article class="panel"><h3>Próximo contacto con actores clave</h3><p class="caption">Días desde el último contacto documentado en el proyecto seleccionado. La cadencia se define manualmente por stakeholder.</p><div id="contacts"></div></article>
+   <article class="panel wide"><h3>Calidad y trazabilidad antes de la interpretación</h3><p>Una transcripción repetitiva, vacía o con hablantes inciertos queda <strong>fuera del cálculo de postura</strong>. La ausencia de evidencia se muestra como <strong>Sin datos</strong>; no cuenta como neutral.</p><p class="caption">Cada indicador debe permitir consultar la sesión, la versión de transcripción, el fragmento de respaldo y la revisión humana. El coste estimado se concilia por proyecto y modelo con Usage/Costs; no equivale a una factura. El seguimiento nunca usa género, identidad inferida por voz ni diagnóstico emocional.</p></article>
+  </div>
+ </section>
+</main>
+<footer><strong>Siguiente paso:</strong> implementar en una rama revisable y comprobar captura, permisos y conservación de audio; después desplegar el piloto de 7 días con autorización de PROD. Tipografía digital propuesta: Inter, con Arial como respaldo local. Esta maqueta no crea, modifica ni retira tools WebMCP y no se publica.</footer>
+<dialog id="cancelDialog" aria-labelledby="cancelTitle"><h2 id="cancelTitle">Cancelar análisis de ejemplo</h2><p id="cancelSession"></p><p id="cancelWarning"></p><p class="caption">La decisión conserva la trazabilidad y el audio original según la política de retención; no elimina la sala. Esta confirmación sólo modifica el ejemplo en memoria de la página.</p><div class="dialog-actions"><button type="button" class="button secondary" id="keepSession">Conservar</button><button type="button" class="button danger" id="confirmCancel">Confirmar simulación</button></div></dialog>
+<dialog id="detailDialog" aria-labelledby="detailTitle"><h2 id="detailTitle">Detalle simulado</h2><div id="detailContent"></div><div class="dialog-actions"><button type="button" class="button" id="closeDetail">Cerrar</button></div></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/visualizations/assets/app.js" defer></script>
+</body>
+</html>

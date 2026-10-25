@@ -1,58 +1,37 @@
 <!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>{{.Slug}} — Meeting</title>
-		<style>
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-			}
-			body {
-				font-family: system-ui, sans-serif;
-				background: #1a1a2e;
-				color: #fff;
-			}
-			#meet {
-				width: 100%;
-				height: 100vh;
-			}
-		</style>
-		<script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
-		<script>
-			// Remove JWT from URL bar to prevent accidental sharing
-			if (window.location.search) {
-				history.replaceState(null, "", window.location.pathname)
-			}
-		</script>
-	</head>
-	<body>
-		<div id="meet"></div>
-
-		<script>
-			var api = new JitsiMeetExternalAPI('8x8.vc', {
-			    roomName: '{{.AppID}}/{{.Slug}}',
-			    jwt: '{{.JWT}}',
-			    parentNode: document.getElementById('meet'),
-			    userInfo: {
-			        displayName: '{{.DisplayName}}'
-			    }
-			});
-			{{if .IsModerator}}
-			api.addEventListener('readyToClose', function() {
-			    navigator.sendBeacon('/m/{{.Slug}}/end');
-			    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
-			});
-			window.addEventListener('beforeunload', function() {
-			    navigator.sendBeacon('/m/{{.Slug}}/end');
-			});
-			{{else}}
-			api.addEventListener('readyToClose', function() {
-			    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;color:#fff"><h1>Meeting ended</h1></div>';
-			});
-			{{end}}
-		</script>
-	</body>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>{{.Slug}} · Reunión</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
+	<script src="https://8x8.vc/{{.AppID}}/external_api.js"></script>
+	<script src="{{asset "capture-options.js"}}" defer></script>
+	<script src="{{asset "meeting.js"}}" defer></script>
+</head>
+<body class="meeting">
+	<div class="brand-overlay" aria-label="Transgenia: IA aplicada"><img src="{{asset "transgenia-logo-alt.png"}}" alt="Transgenia" width="146" height="32" /><span>IA aplicada</span></div>
+	<section id="audio-setup" class="audio-setup" aria-labelledby="audio-setup-title">
+		<h1 id="audio-setup-title">Prepara el audio de tu reunión</h1>
+		<p class="audio-intro">Elige el idioma y comprueba tu micrófono antes de entrar.</p>
+		<label for="meeting-language">Idioma de la reunión</label>
+		<select id="meeting-language"><option value="es" selected>Español (México)</option><option value="en">English</option><option value="mixed">Español e inglés</option></select>
+		<label class="audio-check"><input id="shared-microphone" type="checkbox" /> Varias personas comparten este micrófono</label>
+		<p class="audio-help">El nombre de la conexión identifica el dispositivo. En un micrófono compartido no identifica a cada hablante.</p>
+		<label for="audio-device">Micrófono para la captura</label>
+		<select id="audio-device"><option value="">Predeterminado del sistema</option></select>
+		<div class="audio-actions"><button id="audio-detect" type="button" class="secondary">Detectar micrófonos</button><button id="audio-test" type="button" class="secondary">Probar señal durante 4 s</button></div>
+		<label for="audio-level">Nivel de entrada durante la prueba</label>
+		<meter id="audio-level" min="0" max="1" value="0">0</meter>
+		<p id="audio-test-status" class="audio-help" role="status">La prueba es local: no guarda, sube ni envía audio a IA.</p>
+		<label class="audio-check"><input id="capture-opt-in" type="checkbox" /> Capturar mi audio para preparar la transcripción y la minuta</label>
+		<p id="capture-explanation" class="audio-help">El audio se guarda de forma privada con una retención configurada de {{audioRetentionDays}} días y limpieza periódica. Su procesamiento con IA requiere aprobación posterior del anfitrión. Al salir, espera a que termine la subida.</p>
+		<p id="audio-device-status" class="audio-help" role="status">El micrófono de Jitsi se verificará por su nombre, porque sus identificadores pueden ser distintos.</p>
+		<button id="join-meeting" class="block" type="button">Entrar a la reunión</button>
+	</section>
+	<button id="audio-settings-toggle" class="audio-settings-toggle" type="button" hidden aria-controls="audio-setup" aria-expanded="false">Audio de la sesión</button>
+	<div id="meet" hidden data-app-id="{{.AppID}}" data-room="{{.Slug}}" data-jwt="{{.JWT}}" data-name="{{.DisplayName}}"
+		data-moderator="{{.IsModerator}}" data-csrf="{{.CSRF}}" data-capture="{{.Capture}}"></div>
+</body>
 </html>

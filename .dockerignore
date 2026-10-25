@@ -1,6 +1,9 @@
 .git
 .env
 *.db
+*.db-*
 *.pk
+*.pem
 jaas-app
 deploy/env
+deploy/transgenia/secrets
