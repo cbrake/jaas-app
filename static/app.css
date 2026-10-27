@@ -1,0 +1,124 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --brand: #0b3d91; --brand-2: #1d5fd1; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --muted: #6b7280; --line: #e5e7eb; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f6fb; color: #111827; line-height: 1.5; }
+a { color: var(--brand-2); }
+.center { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.card { background: #fff; border-radius: 10px; padding: 1.75rem; box-shadow: 0 2px 10px rgba(0,0,0,.08); width: 100%; max-width: 420px; }
+.card.wide { max-width: none; }
+.logo { width: 48px; display: block; margin-bottom: 1rem; }
+h1 { font-size: 1.35rem; margin-bottom: .5rem; word-break: break-word; }
+h2 { font-size: 1.05rem; margin: 1.25rem 0 .75rem; }
+p.sub { color: var(--muted); margin-bottom: 1.25rem; font-size: .95rem; }
+label { display: block; font-size: .85rem; color: #374151; margin: .5rem 0 .25rem; }
+input[type=text], input[type=password] { width: 100%; padding: .6rem .75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1rem; }
+button, .btn { display: inline-block; padding: .55rem 1rem; border-radius: 6px; border: 1px solid transparent; background: var(--brand); color: #fff; font-size: .9rem; cursor: pointer; text-decoration: none; }
+button.secondary, .btn.secondary { background: #fff; color: #111827; border-color: #d1d5db; }
+button.danger { background: #fff; color: var(--bad); border-color: var(--bad); }
+button.linklike { background: none; border: none; color: var(--brand-2); padding: 0; font-size: .85rem; }
+.block { width: 100%; margin-top: 1rem; }
+.error { background: #fef2f2; color: var(--bad); border: 1px solid #fecaca; padding: .6rem .75rem; border-radius: 6px; margin-bottom: 1rem; font-size: .9rem; }
+.notice { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; padding: .6rem .75rem; border-radius: 6px; margin-bottom: 1rem; font-size: .9rem; }
+.hidden { display: none; }
+.foot { color: var(--muted); font-size: .75rem; margin-top: 1.25rem; text-align: center; }
+
+/* admin */
+.page { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.top .brand { display: flex; align-items: center; gap: .75rem; }
+.top .brand img { width: 36px; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-end; }
+.row > div { flex: 1 1 200px; }
+.room { background: #fff; border-radius: 10px; padding: 1rem 1.25rem; box-shadow: 0 1px 6px rgba(0,0,0,.06); margin-bottom: .9rem; }
+.room-head { display: flex; justify-content: space-between; gap: .75rem; flex-wrap: wrap; align-items: center; }
+.room-head code { font-size: .85rem; color: #374151; word-break: break-all; }
+.actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: .75rem; }
+.actions form { display: inline-flex; gap: .4rem; align-items: center; }
+.actions input[type=text] { width: 160px; padding: .35rem .5rem; font-size: .85rem; }
+.actions button { padding: .35rem .75rem; font-size: .8rem; }
+.badge { display: inline-block; font-size: .72rem; padding: .1rem .5rem; border-radius: 999px; background: #f3f4f6; color: #4b5563; vertical-align: middle; }
+.badge.ok { background: #dcfce7; color: var(--ok); }
+.badge.warn { background: #fef3c7; color: var(--warn); }
+.badge.bad { background: #fee2e2; color: var(--bad); }
+.sub-list { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--line); font-size: .85rem; }
+.sub-list ul { list-style: none; margin-top: .25rem; }
+.sub-list li { margin: .2rem 0; }
+.muted { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: .88rem; margin-top: .5rem; }
+th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #f9fafb; font-weight: 600; }
+.doc h2 { border-bottom: 1px solid var(--line); padding-bottom: .25rem; }
+.doc ul { margin-left: 1.25rem; }
+.msg { padding: .4rem 0; border-bottom: 1px solid #f3f4f6; }
+.msg .who { font-weight: 600; }
+.msg .when { color: var(--muted); font-size: .75rem; margin-left: .4rem; }
+
+/* meeting */
+body.meeting { background: #0f172a; color: #fff; }
+#meet { width: 100%; height: 100vh; }
+.ended { min-height: 100vh; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+.spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: var(--brand); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.capture-badge { position: fixed; top: 10px; right: 12px; z-index: 10; pointer-events: none; max-width: 46vw;
+	background: rgba(185, 28, 28, .85); color: #fff; font-size: .72rem; line-height: 1.3; padding: .2rem .6rem;
+	border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-badge.muted { background: rgba(75, 85, 99, .92); }
+.capture-badge.off { background: rgba(146, 64, 14, .92); }
+
+/* Transgenia brand: "Transgenia: IA aplicada" */
+.logo-full { height: 40px; width: auto; display: block; margin-bottom: 1rem; }
+.top .brand .logo-full { height: 36px; margin: 0; }
+.tagline { text-align: center; color: #3D3935; font-size: .8rem; letter-spacing: .5px; margin: -0.5rem 0 1.5rem; }
+.tagline-inline { color: #D1333B; font-size: .78rem; font-weight: 600; letter-spacing: .4px; }
+.brand-overlay { position: fixed; top: 10px; left: 12px; z-index: 10; pointer-events: none; display: flex; align-items: center; gap: .55rem;
+	background: rgba(16, 24, 32, .78); padding: .3rem .7rem .3rem .5rem; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.brand-overlay img { height: 22px; width: auto; display: block; }
+.brand-overlay span { color: #EE7623; font-size: .74rem; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+
+/* Meeting audio preparation: private capture settings and explicit opt-in. */
+[hidden] { display: none !important; }
+body.meeting { background: #101820; color: #FEFEEA; font-family: Inter, system-ui, sans-serif; }
+.audio-setup { position: relative; z-index: 20; width: min(620px, calc(100% - 2rem)); margin: 76px auto 2rem;
+	padding: 1.5rem; border-radius: 12px; background: #FEFEEA; color: #101820; border-top: 4px solid #D1333B; }
+.audio-setup h1 { margin-bottom: .6rem; }
+.audio-setup label { color: #101820; font-weight: 600; margin-top: .9rem; }
+.audio-setup select { width: 100%; padding: .55rem; border: 1px solid #3D3935; border-radius: 6px; background: #FEFEEA; color: #101820; font: inherit; }
+.audio-setup button { background: #101820; color: #FEFEEA; border-color: #101820; }
+.audio-setup button.secondary { background: #FEFEEA; color: #003C4D; border-color: #003C4D; }
+.audio-setup button:disabled { opacity: .55; cursor: not-allowed; }
+.audio-setup :focus-visible, .audio-settings-toggle:focus-visible { outline: 3px solid #D1333B; outline-offset: 3px; }
+.audio-intro, .audio-help { color: #3D3935; font-size: .84rem; }
+.audio-help { margin-top: .4rem; }
+.audio-check { display: flex; gap: .6rem; align-items: flex-start; }
+.audio-check input { margin-top: .2rem; accent-color: #D1333B; min-width: 1rem; min-height: 1rem; }
+.audio-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .7rem; }
+#audio-level { width: 100%; height: 1.1rem; }
+#audio-level::-webkit-meter-bar { background: #FEFEEA; border-color: #3D3935; }
+#audio-level::-webkit-meter-optimum-value { background: #003C4D; }
+#audio-level::-moz-meter-bar { background: #003C4D; }
+.audio-setup.during-meeting { position: fixed; left: 1rem; top: 3.7rem; bottom: 4rem; max-width: 440px; margin: 0; overflow-y: auto; }
+.audio-settings-toggle { position: fixed; z-index: 15; left: 12px; bottom: 12px; background: #101820; color: #FEFEEA; border: 1px solid #EE7623; }
+.capture-badge { background: #101820; color: #FEFEEA; border: 1px solid #EE7623; border-radius: 6px; white-space: normal; }
+.capture-badge.muted { background: #3D3935; color: #FEFEEA; }
+.capture-badge.off { background: #101820; color: #FEFEEA; border-color: #D1333B; }
+.ended { padding: 2rem; text-align: center; }
+@media (max-width: 600px) {
+	.audio-setup { margin-top: 64px; padding: 1.1rem; }
+	.audio-setup.during-meeting { left: .5rem; width: calc(100% - 1rem); top: 4rem; max-width: none; }
+	.capture-badge { top: 49px; max-width: calc(100% - 24px); }
+	.audio-actions button { width: 100%; }
+}
+
+/* Private session search uses the measured Transgenia palette. */
+body.meet-admin { background: #FEFEEA; color: #101820; font-family: Inter, system-ui, sans-serif; }
+.meet-admin .page { max-width: 1200px; }
+.meet-admin a { color: #D1333B; }
+.meet-admin .card, .meet-admin .room { background: #FEFEEA; border: 1px solid #3D3935; box-shadow: none; margin-top: 1rem; }
+.meet-admin .row { gap: 1rem; }
+.meet-admin .row > label { flex: 1 1 200px; min-width: 0; color: #101820; font-weight: 600; }
+.meet-admin input:not([type=hidden]), .meet-admin select { display: block; width: 100%; padding: .6rem .75rem; margin-top: .35rem; border: 1px solid #3D3935; border-radius: 6px; font: inherit; background: #FEFEEA; color: #101820; }
+.meet-admin button, .meet-admin .btn { background: #101820; color: #FEFEEA; border-color: #101820; }
+.meet-admin .secondary { background: #FEFEEA; color: #003C4D; border-color: #003C4D; }
+.meet-admin .danger { background: #FEFEEA; color: #D1333B; border-color: #D1333B; }
+.meet-admin .room p { overflow-wrap: anywhere; }
+.meet-admin .foot { color: #3D3935; }
+.meet-admin :focus-visible { outline: 3px solid #D1333B; outline-offset: 3px; }

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="robots" content="noindex, nofollow" />
+	<title>Minuta · {{.M.RoomSlug}}</title>
+	<link rel="stylesheet" href="{{asset "app.css"}}" />
+</head>
+<body>
+	<div class="page">
+		<p><a href="/admin">← Volver al panel</a> <span class="muted" style="float:right">Transgenia: IA aplicada</span></p>
+		<div class="card wide doc">
+			<h1>Minuta · {{.M.RoomSlug}}</h1>
+			<p class="sub">Reunión {{local .M.MeetingAt}} ({{.TZ}}) · sesión {{.M.SessionID}}{{with .M.Model}} · modelo {{.}}{{end}}</p>
+			{{if eq .M.Status "cancelled"}}<p class="notice">Análisis cancelado. No se enviará ni se regenerará. El costo previo y los correos ya enviados permanecen.</p>{{else}}
+			<form method="POST" action="/admin/minutes/{{.M.ID}}/cancel"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit" class="danger">Cancelar borrador</button></form>{{end}}
+			{{if eq .M.Status "ready"}}
+			<p class="notice">Borrador generado automáticamente. Revísalo antes de compartirlo o actuar sobre él.</p>
+			<div class="row">
+				<a class="btn secondary" href="/admin/minutes/{{.M.ID}}/download">Descargar Markdown</a>
+				<a class="btn secondary" href="/admin/minutes/{{.M.ID}}/download?format=json">Descargar JSON</a>
+			</div>
+			<h2>Resumen</h2>
+			<p>{{.R.Summary}}</p>
+			{{if .R.KeyPoints}}<h2>Puntos clave</h2>
+			<ul>{{range .R.KeyPoints}}<li>{{.}}</li>{{end}}</ul>{{end}}
+			{{with .R.Sentiment.Overall}}<h2>Análisis de sentimiento</h2>
+			<p><span class="badge {{if eq . "positivo"}}ok{{else if eq . "negativo"}}bad{{else}}warn{{end}}">{{.}}</span> {{$.R.Sentiment.Explanation}}</p>
+			{{if $.R.Sentiment.Timeline}}<table><tr><th>Fase</th><th>Sentimiento</th><th>Resumen</th></tr>
+				{{range $.R.Sentiment.Timeline}}<tr><td>{{.Phase}}</td><td>{{.Overall}}</td><td>{{.Summary}}</td></tr>{{end}}</table>{{end}}
+			{{if $.R.Sentiment.BySpeaker}}<table><tr><th>Participante</th><th>Sentimiento</th><th>Explicación</th><th>Evidencia</th></tr>
+				{{range $.R.Sentiment.BySpeaker}}<tr><td>{{.Speaker}}</td><td>{{.Overall}}</td><td>{{.Explanation}}</td><td class="muted">{{.Evidence}}</td></tr>{{end}}</table>{{end}}
+			{{if $.R.Sentiment.Moments}}<ul>{{range $.R.Sentiment.Moments}}<li><strong>{{.Emotion}}</strong>{{with .Time}} · {{deref .}}{{end}} · {{.Speaker}}: <em>“{{.Quote}}”</em></li>{{end}}</ul>{{end}}
+			{{with $.R.Metrics}}<h2>Participación {{if .Measured}}medida en el audio{{else}}estimada{{end}}</h2>
+			<table><tr><th>Participante</th><th>Tiempo de habla</th><th>Palabras/min</th><th>Turnos</th><th>Turno más largo</th><th>Interrupciones</th></tr>
+				{{range .Speakers}}<tr><td>{{.Speaker}}</td><td>{{printf "%.0f" .SharePct}}%</td><td>{{printf "%.0f" .WordsPerMinute}}</td><td>{{.Turns}}</td><td>{{printf "%.0f" .LongestTurnSec}} s</td><td>{{.Interruptions}}</td></tr>{{end}}</table>{{end}}
+			<p class="muted">{{with $.R.Sentiment.Caveats}}{{.}} {{end}}El análisis combina lo dicho con señales medidas del audio (tiempo de habla, ritmo, turnos e interrupciones); no mide el tono de voz.</p>{{end}}
+			<h2>Decisiones</h2>
+			{{if .R.Decisions}}<ul>{{range .R.Decisions}}<li><strong>{{.Decision}}</strong> — {{.Context}}</li>{{end}}</ul>{{else}}<p class="muted">Sin decisiones explícitas.</p>{{end}}
+			<h2>Tareas</h2>
+			{{if .R.ActionItems}}
+			<table>
+				<tr><th>Tarea</th><th>Responsable</th><th>Fecha</th><th>Confianza</th><th>Evidencia</th></tr>
+				{{range .R.ActionItems}}
+				<tr><td>{{.Task}}</td><td>{{with .Owner}}{{deref .}}{{else}}—{{end}}</td><td>{{with .DueDate}}{{deref .}}{{else}}—{{end}}</td>
+					<td><span class="badge {{if eq .Confidence "high"}}ok{{else if eq .Confidence "medium"}}warn{{else}}bad{{end}}">{{.Confidence}}</span></td>
+					<td class="muted">{{.Evidence}}</td></tr>
+				{{end}}
+			</table>
+			{{else}}<p class="muted">Sin tareas.</p>{{end}}
+			<h2>Riesgos</h2>
+			{{if .R.Risks}}<ul>{{range .R.Risks}}<li>{{.}}</li>{{end}}</ul>{{else}}<p class="muted">Ninguno.</p>{{end}}
+			<h2>Preguntas abiertas</h2>
+			{{if .R.OpenQuestions}}<ul>{{range .R.OpenQuestions}}<li>{{.}}</li>{{end}}</ul>{{else}}<p class="muted">Ninguna.</p>{{end}}
+
+			<h2>Señales comerciales para revisión interna</h2>
+			<p class="notice">Hipótesis para decidir el seguimiento. No son oportunidades confirmadas ni probabilidades de venta. La identidad del hablante y su relación con el cliente requieren verificación. Esta sección no se incluye en el correo ni en el Markdown para participantes.</p>
+			{{if .R.CommercialAnalysisAvailable}}
+			{{range .R.CommercialSignals}}
+			<section class="card">
+				<h3>{{.KindLabel}}: {{.IntentLabel}}</h3>
+				{{with .Service}}<p><strong>Servicio mencionado:</strong> {{.}}</p>{{end}}
+				<p><strong>Etiqueta de la transcripción:</strong> {{.Speaker}}</p>
+				<blockquote>{{.Evidence}}</blockquote>
+				<p><strong>Hipótesis:</strong> {{.Reason}}</p>
+				<p><strong>Siguiente paso sugerido:</strong> {{.NextStep}}</p>
+				<p class="muted">Respaldo textual cualitativo: {{.Confidence}}. Pendiente de revisión en Odoo.</p>
+			</section>
+			{{else}}<p class="muted">Se evaluaron señales comerciales y no se encontraron hipótesis con evidencia suficiente.</p>{{end}}
+			{{else}}<p class="muted">Esta minuta es anterior al análisis comercial. No evaluada; no equivale a ausencia de oportunidades.</p>{{end}}
+
+			<h2>Enviar a participantes</h2>
+			{{with .Sent}}<p class="notice">Envío aprobado: {{.}} correo(s) en cola. El estado se actualiza al recargar.</p>{{end}}
+			{{if not .MailEnabled}}<p class="muted">El envío de correo no está configurado en el servidor.</p>
+			{{else if not .Recipients}}<p class="muted">No hay participantes con correo registrados para esta reunión.</p>
+			{{else}}
+			<p class="muted">Cada persona recibe la minuta y la transcripción completa (adjunta). Revisa la minuta antes de enviar; las respuestas llegan a tu correo.</p>
+			<form method="POST" action="/admin/minutes/{{.M.ID}}/send">
+				<input type="hidden" name="csrf_token" value="{{.CSRF}}" />
+				<table>
+					<tr><th></th><th>Participante</th><th>Correo</th><th>Origen</th><th>Estado</th></tr>
+					{{range .Recipients}}
+					<tr>
+						<td>{{if not .Status}}<input type="checkbox" name="recipient" value="{{.Email}}" checked />{{end}}</td>
+						<td>{{.Name}}</td><td>{{.Email}}</td>
+						<td>{{if .InSession}}<span class="badge ok">en la sesión</span>{{else}}<span class="badge warn">entró por el enlace</span>{{end}}</td>
+						<td>{{if eq .Status "sent"}}<span class="badge ok">enviado</span>{{else if eq .Status "queued"}}<span class="badge warn">en cola</span>{{else if eq .Status "failed"}}<span class="badge bad">falló</span> <span class="muted">{{.Error}}</span>{{else}}—{{end}}</td>
+					</tr>
+					{{end}}
+				</table>
+				<p style="margin-top:.75rem"><button type="submit">Enviar transcripción y minuta</button></p>
+			</form>
+			{{end}}
+			{{else if eq .M.Status "failed"}}
+			<p class="error">No se pudo generar la minuta (intento {{.M.Attempts}}): {{.M.Error}}</p>
+			<form method="POST" action="/admin/minutes/{{.M.ID}}/retry">
+				<input type="hidden" name="csrf_token" value="{{.CSRF}}" />
+				<button type="submit">Reintentar</button>
+			</form>
+			{{else if ne .M.Status "cancelled"}}
+			<p class="notice">Estado: {{if eq .M.Status "processing"}}procesando{{else}}en cola{{end}} (intento {{.M.Attempts}}).{{with .M.Error}} Último error: {{.}}{{end}}</p>
+			{{end}}
+		</div>
+	</div>
+</body>
+</html>

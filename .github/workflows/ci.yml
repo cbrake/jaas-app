@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, transgenia/production]
   push:
     branches: [main]
 
@@ -18,7 +18,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.26.9'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Browser capture policy tests
+        run: node --test tests/capture-options.test.cjs
 
       - name: Download dependencies
         run: go mod download
@@ -34,6 +42,7 @@ jobs:
           if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
             echo "Go code is not formatted. Please run 'gofmt -s -w .'"
             gofmt -s -l .
+            gofmt -s -d .
             exit 1
           fi
 

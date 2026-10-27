@@ -1,0 +1,12 @@
+# Add only after privately verifying existing Odoo accounts and before the
+# sender's first activation. Use alongside compose.odoo-sync.yaml.
+services:
+  meetings:
+    environment:
+      ODOO_OWNER_MAP_FILE: /run/secrets/odoo_owner_map
+    secrets:
+      - odoo_owner_map
+
+secrets:
+  odoo_owner_map:
+    file: ./secrets/odoo_owner_map

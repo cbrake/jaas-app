@@ -1,0 +1,9 @@
+[Unit]
+Description=tgn-meetings: e-mail alert for failed unit %i
+
+[Service]
+Type=oneshot
+StateDirectory=tgn-meetings-alert
+StateDirectoryMode=0700
+ExecStart=/opt/transgenia-meetings/bin/alert.sh %i
+TimeoutStartSec=2min

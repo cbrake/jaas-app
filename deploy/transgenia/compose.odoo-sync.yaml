@@ -1,0 +1,11 @@
+# Optional credential mount. Use only after configuring the receiver.
+services:
+  meetings:
+    environment:
+      ODOO_API_KEY_FILE: /run/secrets/odoo_api_key
+    secrets:
+      - odoo_api_key
+
+secrets:
+  odoo_api_key:
+    file: ./secrets/odoo_api_key

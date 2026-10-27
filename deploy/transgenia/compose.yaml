@@ -1,0 +1,64 @@
+# Transgenia meetings — isolated Compose project.
+# Lives in /opt/transgenia-meetings (see deploy/transgenia/README.md).
+# Values in ${...} come from /opt/transgenia-meetings/.env (non-secret).
+name: transgenia-meetings
+
+services:
+  meetings:
+    image: transgenia-meetings:${IMAGE_TAG:?set IMAGE_TAG in .env}
+    container_name: tgn-meetings
+    restart: unless-stopped
+    user: "${TGN_UID:?set TGN_UID}:${TGN_GID:?set TGN_GID}"
+    env_file: ./meetings.env
+    environment:
+      DB_PATH: /data/jaas.db
+      LISTEN_ADDR: ":8370"
+      JAAS_PRIVATE_KEY_FILE: /run/secrets/jaas_private_key
+      JAAS_WEBHOOK_SECRET_FILE: /run/secrets/jaas_webhook_secret
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      ADMIN_INITIAL_PASSWORD_FILE: /run/secrets/admin_initial_password
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets:
+      - smtp_password
+      - jaas_private_key
+      - jaas_webhook_secret
+      - openai_api_key
+      - admin_initial_password
+    volumes:
+      - ./data:/data
+    # Loopback only: the host nginx terminates TLS for meet.transgenia.org.
+    ports:
+      - "127.0.0.1:8370:8370"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 128
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "/app/jaas-app", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+# File secrets are bind-mounted read-only at /run/secrets/<name>; on the host
+# they are root:tgn-meetings 0440 (set by scripts/set-secret.sh).
+secrets:
+  jaas_private_key:
+    file: ./secrets/jaas_private_key
+  jaas_webhook_secret:
+    file: ./secrets/jaas_webhook_secret
+  openai_api_key:
+    file: ./secrets/openai_api_key
+  admin_initial_password:
+    file: ./secrets/admin_initial_password
+  smtp_password:
+    file: ./secrets/smtp_password
