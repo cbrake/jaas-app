@@ -8,13 +8,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
+### Added
+
+- **Markdown view of transcriptions** — a Markdown tab on the transcription page
+  with a Copy button, for pasting a transcript into email or notes
+
 ## [0.1.0] - 2026-07-16
 
 ### Added
 
+- Version number displayed on the admin dashboard and join pages via a `version`
+  template function
 - Security audit (`security.md`) documenting known findings across the
   authentication, webhook, and JWT paths
+- README install instructions for downloading a release binary from GitHub
 - README sections describing the meeting flow and the motivation for the project
+
+### Changed
+
+- Development instructions (build, run, test, format) moved from `README.md` to
+  `developers.md`, leaving the README focused on installing and configuring the
+  application
 
 ### Removed
 
