@@ -17,6 +17,16 @@
         .speaker { font-weight: 600; font-size: 0.9rem; }
         .time { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
         .content { margin-top: 0.25rem; line-height: 1.5; color: #333; }
+        .tabs { display: flex; gap: 0.25rem; margin-bottom: 0.75rem; }
+        .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 0.4rem 0.75rem; font: inherit; font-size: 0.9rem; color: #666; cursor: pointer; }
+        .tab.active { color: #111; border-bottom-color: #2563eb; font-weight: 600; }
+        .markdown-panel { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .markdown-panel[hidden], .messages[hidden] { display: none; }
+        .copy-bar { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .copy-status { color: #16a34a; font-size: 0.85rem; }
+        .copy-btn { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.4rem 0.9rem; font: inherit; font-size: 0.85rem; cursor: pointer; }
+        .copy-btn:hover { background: #1d4ed8; }
+        .markdown { white-space: pre-wrap; word-wrap: break-word; font-family: ui-monospace, monospace; font-size: 0.85rem; line-height: 1.5; color: #333; }
         @media (max-width: 600px) {
             body { padding: 1rem; }
         }
@@ -26,7 +36,12 @@
     <h1>{{.Room}}</h1>
     <p class="meta"><span class="local-time" data-utc="{{.Transcription.CreatedAt.Format "2006-01-02T15:04:05Z"}}"></span> · <a href="/admin">Back to dashboard</a></p>
 
-    <div class="messages">
+    <div class="tabs">
+        <button type="button" class="tab active" data-panel="messages">Transcript</button>
+        <button type="button" class="tab" data-panel="markdown-panel">Markdown</button>
+    </div>
+
+    <div class="messages" id="messages">
         {{if .Messages}}
         {{range .Messages}}
         <div class="message">
@@ -38,6 +53,14 @@
         <p style="color: #666;">No messages in this transcription.</p>
         {{end}}
     </div>
+
+    <div class="markdown-panel" id="markdown-panel" hidden>
+        <div class="copy-bar">
+            <span class="copy-status" id="copy-status"></span>
+            <button type="button" class="copy-btn" id="copy-btn">Copy</button>
+        </div>
+        <pre class="markdown" id="markdown"></pre>
+    </div>
     <script>
         document.querySelectorAll('.local-time').forEach(function(el) {
             var d = new Date(el.dataset.utc);
@@ -46,6 +69,37 @@
             } else {
                 el.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
             }
+        });
+
+        // Build markdown from the rendered transcript so times match the viewer's locale.
+        (function() {
+            var lines = ['# ' + document.querySelector('h1').textContent, '', document.querySelector('.meta .local-time').textContent, ''];
+            document.querySelectorAll('.message').forEach(function(m) {
+                var name = m.querySelector('.speaker').textContent;
+                var time = m.querySelector('.time').textContent;
+                var content = m.querySelector('.content').textContent.trim();
+                lines.push('**' + name + '** (' + time + '): ' + content, '');
+            });
+            document.getElementById('markdown').textContent = lines.join('\n').trim() + '\n';
+        })();
+
+        document.querySelectorAll('.tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.tab').forEach(function(t) {
+                    t.classList.toggle('active', t === tab);
+                    document.getElementById(t.dataset.panel).hidden = t !== tab;
+                });
+            });
+        });
+
+        document.getElementById('copy-btn').addEventListener('click', function() {
+            var status = document.getElementById('copy-status');
+            navigator.clipboard.writeText(document.getElementById('markdown').textContent).then(function() {
+                status.textContent = 'Copied';
+            }, function() {
+                status.textContent = 'Copy failed';
+            });
+            setTimeout(function() { status.textContent = ''; }, 2000);
         });
     </script>
 </body>

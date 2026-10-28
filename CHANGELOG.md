@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Markdown view of transcriptions** — a Markdown tab on the transcription page
+  with a Copy button, for pasting a transcript into email or notes
+
 ## [0.1.0] - 2026-07-16
 
 ### Added
